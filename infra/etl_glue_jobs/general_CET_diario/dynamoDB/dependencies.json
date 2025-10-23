@@ -1,0 +1,70 @@
+{
+  "DependenciesTable": [
+    {
+      "PutRequest": {
+        "Item": {
+            "automatization": {
+                "S": "general_cet_diario"
+            },
+            "analytics_config": {
+                "L": [
+                {
+                    "M": {
+                    "analytics_process_type_1": {
+                        "S": "overwrite"
+                    },
+                    "analytics_table_1": {
+                        "S": "t_rcrm_output"
+                    },
+                    "analytics_table_frequency_1": {
+                        "S": "daily"
+                    }
+                    }
+                }
+                ]
+            },
+            "description": {
+                "S": "Proceso diario para la ingesta y procesamiento de rcrm."
+            },
+            "isActive": {
+                "BOOL": true
+            },
+            "master_config": {
+                "L": [
+                {
+                    "M": {
+                    "master_process_type_1": {
+                        "S": "overwrite"
+                    },
+                    "master_table_1": {
+                        "S": "t_rcrm_input"
+                    },
+                    "master_table_frequency_1": {
+                        "S": "daily"
+                    }
+                    }
+                }
+                ]
+            },
+            "raw_config": {
+                "L": [
+                {
+                    "M": {
+                    "raw_process_type_1": {
+                        "S": "overwrite"
+                    },
+                    "raw_table_1": {
+                        "S": "t_rcrm_input"
+                    },
+                    "raw_table_frequency_1": {
+                        "S": "daily"
+                    }
+                    }
+                }
+                ]
+            }
+            }
+      }
+    }
+  ]
+}
