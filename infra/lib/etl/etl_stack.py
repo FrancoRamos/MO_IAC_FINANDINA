@@ -11,25 +11,38 @@ from infra.constructs.cdk_storage import StorageConstruct
 from infra.constructs.cdk_metadata_catalog import MetadataCatalogConstruct
 from infra.constructs.cdk_security import SecurityConstruct
 
-from infra.etl_stepfunction.etl_base import EtlTfBaseConstruct, EtlTfBaseConstructProps
-from infra.etl_stepfunction.etl_base import EtlSfBaseConstruct, EtlSfBaseConstructProps
-from infra.etl_stepfunction.etl_CET import EtlTfGeneralCETDiarioConstruct, EtlTfGeneralCETDiarioConstructProps
-from infra.etl_stepfunction.etl_CET import EtlSfGeneralCETDiarioConstruct, EtlSfGeneralCETDiarioConstructProps
+from infra.etl_stepfunction.BASE import EtlTfBaseConstruct, EtlTfBaseConstructProps
+from infra.etl_stepfunction.BASE import EtlSfBaseConstruct, EtlSfBaseConstructProps
+from infra.etl_stepfunction.AUTOMATIZACION.CET import EtlTfGeneralCETDiarioConstruct, EtlTfGeneralCETDiarioConstructProps
+from infra.etl_stepfunction.AUTOMATIZACION.CET import EtlSfGeneralCETDiarioConstruct, EtlSfGeneralCETDiarioConstructProps
 
-from infra.etl_stepfunction.etl_COBRANZA.PLANO_MAYOR import PlanoMayorTf, PlanoMayorTfProps
-from infra.etl_stepfunction.etl_COBRANZA.PLANO_MAYOR import PlanoMayorSf, PlanoMayorSfProps
+from infra.etl_stepfunction.COBRANZA.PLANO_MAYOR import PlanoMayorTf, PlanoMayorTfProps
+from infra.etl_stepfunction.COBRANZA.PLANO_MAYOR import PlanoMayorSf, PlanoMayorSfProps
 
-from infra.etl_stepfunction.etl_FUENTES.SD import PlTxtTf, PlTxtTfProps
-from infra.etl_stepfunction.etl_FUENTES.SD import PlTxtSf, PlTxtSfProps
+from infra.etl_stepfunction.FUENTES.SD import PlTxtTf, PlTxtTfProps
+from infra.etl_stepfunction.FUENTES.SD import PlTxtSf, PlTxtSfProps
 
-from infra.etl_stepfunction.etl_FUENTES.PLANOS import PlXlsxTf, TfProps
-from infra.etl_stepfunction.etl_FUENTES.PLANOS import PlXlsxSf, SfProps
+from infra.etl_stepfunction.FUENTES.PLANOS.DS_TO_FILE_XLSX import PlXlsxTf, TfProps
+from infra.etl_stepfunction.FUENTES.PLANOS.DS_TO_FILE_XLSX import PlXlsxSf, SfProps
 
-from infra.etl_stepfunction.etl_FUENTES.FIVE9.ADLS_CET_FIVE9 import EtlTfAdlsCetFive9Construct, EtlTfAdlsCetFive9ConstructProps
-from infra.etl_stepfunction.etl_FUENTES.FIVE9.ADLS_CET_FIVE9 import EtlSfAdlsCetFive9Construct, EtlSfAdlsCetFive9ConstructProps
+from infra.etl_stepfunction.FUENTES.FIVE9.ADLS_CET_FIVE9 import EtlTfAdlsCetFive9Construct, EtlTfAdlsCetFive9ConstructProps
+from infra.etl_stepfunction.FUENTES.FIVE9.ADLS_CET_FIVE9 import EtlSfAdlsCetFive9Construct, EtlSfAdlsCetFive9ConstructProps
 
-from infra.etl_stepfunction.etl_SD import EtlTfGenetalSDDiarioConstruct, EtlTfGeneralSDDiarioConstructProps
-from infra.etl_stepfunction.etl_SD import EtlSfGenetalSDDiarioConstruct, EtlSfGenetalSDDiarioConstructProps
+from infra.etl_stepfunction.AUTOMATIZACION.SD import EtlTfGenetalSDDiarioConstruct, EtlTfGeneralSDDiarioConstructProps
+from infra.etl_stepfunction.AUTOMATIZACION.SD import EtlSfGenetalSDDiarioConstruct, EtlSfGenetalSDDiarioConstructProps
+
+from infra.etl_stepfunction.FUENTES.FABOGRIESGO.ADLS_ALERTASFRAUDE import EtlSfAdlsFaboAlertasFraudeConstruct, EtlSfAdlsFaboAlertasFraudeConstructProps
+
+from infra.etl_stepfunction.FUENTES.FABOGRIESGO.ADLS_AGIL import EtlSfAdlsFaboAgilConstruct, EtlSfAdlsFaboAgilConstructProps
+from infra.etl_stepfunction.FUENTES.FABOGRIESGO.ADLS_AGIL import EtlTfAdlsFaboAgilConstruct, EtlTfAdlsFaboAgilConstructProps
+
+from infra.etl_stepfunction.FUENTES.FABOGSQLCLU.ADLS_GESTIONCLIENTE import EtlTfAdlsFaboGestionClienteConstruct, EtlTfAdlsFaboGestionClienteConstructProps
+from infra.etl_stepfunction.FUENTES.FABOGSQLCLU.ADLS_GESTIONCLIENTE import EtlSfAdlsFaboGestionClienteConstruct, EtlSfAdlsFaboGestionClienteConstructProps
+
+from infra.etl_stepfunction.FUENTES.FABOGRIESGO.ADLS_INSUMOS_AS400 import EtlSfAdlsFaboInsumosAs400Construct, EtlSfAdlsFaboInsumosAs400ConstructProps 
+from infra.etl_stepfunction.FUENTES.FABOGRIESGO.ADLS_INSUMOS_AS400 import EtlTfAdlsFaboInsumosAs400Construct, EtlTfAdlsFaboInsumosAs400ConstructProps 
+
+from infra.etl_stepfunction.FUENTES.FABOGRIESGO.ADLS_VEHICULOS_BIC import EtlSfAdlsFaboVehiculosBic, EtlSfAdlsFaboVehiculosBicProps
 
 from ...utils.naming import create_name
 
@@ -62,7 +75,6 @@ class EtlStack(Stack):
             "UploadGlueJobs",
             sources=[s3_deployment.Source.asset(os.path.join(os.path.dirname(os.path.dirname(__file__)), "../etl_glue_jobs"))],
             destination_bucket=storage.scripts_bucket,
-            destination_key_prefix="etls",
         )  
 
 
@@ -83,6 +95,9 @@ class EtlStack(Stack):
             lambda_execution_role=security.lambdaExecutionRole,
             job_role=security.lakeFormationRole,
             kms_key=security.kmsKey,
+            redshift_secret_arn=props.redshift_secret_arn,
+            redshift_workgroup_name="dl-workgroup-dev-rs",
+            redshift_role = "arn:aws:iam::637423369807:role/redshift-finandina-role",
         )
 
         etl_tf_base = EtlTfBaseConstruct(
@@ -294,7 +309,7 @@ class EtlStack(Stack):
         # ======================================================================================
         # ======================================================================================
 
-        # --- General SD Diario Transform ---
+        # --- Automatizacion SD Diario Transform ---
         etl_tf_sd_diario_props = EtlTfGeneralSDDiarioConstructProps(
             environment=context_env.environment,
             scripts_bucket=storage.scripts_bucket,
@@ -309,7 +324,7 @@ class EtlStack(Stack):
             props=etl_tf_sd_diario_props,
         )
         
-        # --- General SD Diario Step Function ---
+        # --- Automatizacion SD Diario Step Function ---
         etl_sf_sd_diario_props = EtlSfGenetalSDDiarioConstructProps(
             environment=context_env.environment,
             region=context_env.region,
@@ -327,3 +342,136 @@ class EtlStack(Stack):
             "EtlSfGeneralSDDiario",
             props=etl_sf_sd_diario_props,
         )
+        
+        
+        # --- Fuentes Faboriesgo ADSL Agil Step Function ---
+        etl_sf_fabo_alertasfraude_props = EtlSfAdlsFaboAlertasFraudeConstructProps(
+            environment=context_env.environment,
+            get_active_tables_fn=etl_tf_base.get_active_tables_lambda,
+            get_origin_params_fn=etl_tf_base.get_origin_params_lambda,
+            sql_runner_fn=etl_tf_base.sql_runner_lambda,
+            read_metrics_fn=etl_tf_base.read_metrics_lambda,
+            glue_extractcopy_job_name=etl_tf_base.job_extract_copy_name,
+            glue_tdc_job_name=etl_tf_base.job_tdc_name,
+            failure_topic=etl_tf_base.sns_failure_topic,
+        )
+
+        etl_sf_fabo_alertasfraude = EtlSfAdlsFaboAlertasFraudeConstruct(
+            self,
+            "EtlSfFaboAlertasFraude",
+            props=etl_sf_fabo_alertasfraude_props,
+        )
+        
+
+        # --- Fuentes Faboriesgo ADSL Agil Transform ---
+        etl_tf_fabo_agil_props = EtlTfAdlsFaboAgilConstructProps(
+            environment=context_env.environment,
+            scripts_bucket=storage.scripts_bucket,
+            job_role=security.lakeFormationRole,
+        )
+        
+        etl_tf_fabo_agil = EtlTfAdlsFaboAgilConstruct(
+            self,
+            "EtlTfFaboAgil",
+            props=etl_tf_fabo_agil_props,
+        )
+        
+        # --- Fuentes Faboriesgo ADSL Agil Step Function ---
+        etl_sf_fabo_agil_props = EtlSfAdlsFaboAgilConstructProps(
+            environment=context_env.environment,
+            get_active_tables_fn=etl_tf_base.get_active_tables_lambda,
+            get_origin_params_fn=etl_tf_base.get_origin_params_lambda,
+            sql_runner_fn=etl_tf_base.sql_runner_lambda,
+            read_metrics_fn=etl_tf_base.read_metrics_lambda,
+            glue_extractcopy_job_name=etl_tf_base.job_extract_copy_name,
+            glue_bpmpro_job_name=etl_tf_fabo_agil.job_bpmpro_name,
+            failure_topic=etl_tf_base.sns_failure_topic,
+        )
+
+        etl_sf_fabo_agil = EtlSfAdlsFaboAgilConstruct(
+            self,
+            "EtlSfFaboAgil",
+            props=etl_sf_fabo_agil_props,
+        )
+        
+        # --- Fuentes FaboGSQLCLU ADSL Gestion Cliente Transform ---
+        etl_tf_fabo_gestion_cliente_props = EtlTfAdlsFaboGestionClienteConstructProps(
+            environment=context_env.environment,
+            scripts_bucket=storage.scripts_bucket,
+            job_role=security.lakeFormationRole,
+        )
+        
+        etl_tf_fabo_gestion_cliente = EtlTfAdlsFaboGestionClienteConstruct(
+            self,
+            "EtlTfFaboGestionCliente",
+            props=etl_tf_fabo_gestion_cliente_props,
+        )
+        
+        # --- Fuentes FaboGSQLCLU ADSL Gestion Cliente Step Function ---
+        etl_sf_fabo_agil_props = EtlSfAdlsFaboGestionClienteConstructProps(
+            environment=context_env.environment,
+            get_active_tables_fn=etl_tf_base.get_active_tables_lambda,
+            get_origin_params_fn=etl_tf_base.get_origin_params_lambda,
+            sql_runner_fn=etl_tf_base.sql_runner_lambda,
+            read_metrics_fn=etl_tf_base.read_metrics_lambda,
+            glue_extractcopy_job_name=etl_tf_base.job_extract_copy_name,
+            glue_gestioncliente_job_name=etl_tf_fabo_gestion_cliente.job_gestioncliente_name,
+            failure_topic=etl_tf_base.sns_failure_topic,
+        )
+
+        etl_sf_fabo_agil = EtlSfAdlsFaboGestionClienteConstruct(
+            self,
+            "EtlSfFaboGestionCliente",
+            props=etl_sf_fabo_agil_props,
+        )
+        
+        # --- Fuentes Faboriesgo ADSL Insumos AS400 Transform ---
+        etl_tf_fabo_insumos_as400_props = EtlTfAdlsFaboInsumosAs400ConstructProps(
+            environment=context_env.environment,
+            scripts_bucket=storage.scripts_bucket,
+            job_role=security.lakeFormationRole,
+        )
+        
+        etl_tf_fabo_insumos_as400 = EtlTfAdlsFaboInsumosAs400Construct(
+            self,
+            "EtlTfFaboInsumosAS400",
+            props=etl_tf_fabo_insumos_as400_props,
+        )
+        
+        # --- Fuentes Faboriesgo ADSL Insumos AS400 Step Function ---
+        etl_sf_fabo_insumos_as400_props = EtlSfAdlsFaboInsumosAs400ConstructProps(
+            environment=context_env.environment,
+            get_active_tables_fn=etl_tf_base.get_active_tables_lambda,
+            get_origin_params_fn=etl_tf_base.get_origin_params_lambda,
+            sql_runner_fn=etl_tf_base.sql_runner_lambda,
+            read_metrics_fn=etl_tf_base.read_metrics_lambda,
+            glue_extractcopy_job_name=etl_tf_base.job_extract_copy_name,
+            glue_insumos_as400_job_name=etl_tf_fabo_insumos_as400.job_insumos_as400_name,
+            failure_topic=etl_tf_base.sns_failure_topic,
+        )
+
+        etl_sf_fabo_insumos_as400 = EtlSfAdlsFaboInsumosAs400Construct(
+            self,
+            "EtlSfFaboInsumosAS400",
+            props=etl_sf_fabo_insumos_as400_props,
+        )
+        
+        
+        # --- Fuentes Faboriesgo ADSL Vehiculos BIC Step Function ---
+        etl_sf_fabo_vehiculos_bic_props = EtlSfAdlsFaboVehiculosBicProps(
+            environment=context_env.environment,
+            get_active_tables_fn=etl_tf_base.get_active_tables_lambda,
+            get_origin_params_fn=etl_tf_base.get_origin_params_lambda,
+            sql_runner_fn=etl_tf_base.sql_runner_lambda,
+            read_metrics_fn=etl_tf_base.read_metrics_lambda,
+            glue_extractcopy_job_name=etl_tf_base.job_extract_copy_name,
+            failure_topic=etl_tf_base.sns_failure_topic,
+        )
+
+        etl_sf_fabo_vehiculos_bic = EtlSfAdlsFaboVehiculosBic(
+            self,
+            "EtlSfFaboVehiculosBic",
+            props=etl_sf_fabo_vehiculos_bic_props,
+        )
+
+        
