@@ -1,2 +1,0 @@
-from .tf_general_CargaPlanoDwh import PlanoMayorTf, PlanoMayorTfProps
-from .sf_general_CargaPlanoDwh import PlanoMayorSf, PlanoMayorSfProps

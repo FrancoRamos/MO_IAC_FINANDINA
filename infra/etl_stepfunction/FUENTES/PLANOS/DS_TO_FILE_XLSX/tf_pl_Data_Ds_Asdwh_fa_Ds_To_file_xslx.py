@@ -49,18 +49,6 @@ class PlXlsxTf(Construct):
             ],
         )
 
-        # ----- SNS Topic para fallos -----
-        self.topic = sns.Topic(
-            self,
-            "FailureTopic",
-            display_name="ADF-xlsx Failure Notifications",
-        )
-
-        if props.notification_email:
-            self.topic.add_subscription(
-                subs.EmailSubscription(props.notification_email)
-            )
-
         # ----- Rol Step Functions (Data API + SNS) -----
         self.sfn_role = iam.Role(
             self,
@@ -88,7 +76,6 @@ class PlXlsxTf(Construct):
         )
 
         # Permisos cruzados
-        self.topic.grant_publish(self.sfn_role)
         self.export_bucket.grant_read_write(self.sfn_role)
 
         # ----- Política TLS obligatoria en S3 -----

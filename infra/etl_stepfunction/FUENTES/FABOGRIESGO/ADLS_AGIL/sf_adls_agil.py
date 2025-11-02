@@ -22,14 +22,22 @@ class EtlSfAdlsFaboAgilConstructProps:
     glue_extractcopy_job_name: str
     glue_bpmpro_job_name: str
     failure_topic: sns.ITopic
-    max_map_concurrency: int = 10
-    map_items_path: str = "$.active.sfn_view"
-    exec_start_path: str = "$$.Execution.StartTime"
+    raw_bucket_name: str
 
 
 class EtlSfAdlsFaboAgilConstruct(Construct):
     def __init__(self, scope: Construct, id: str, props: EtlSfAdlsFaboAgilConstructProps) -> None:
         super().__init__(scope, id)
+
+        environment = props.environment
+        get_active_tables_fn = props.get_active_tables_fn
+        get_origin_params_fn = props.get_origin_params_fn
+        sql_runner_fn = props.sql_runner_fn
+        read_metrics_fn = props.read_metrics_fn
+        glue_extractcopy_job_name = props.glue_extractcopy_job_name
+        glue_bpmpro_job_name = props.glue_bpmpro_job_name
+        failure_topic = props.failure_topic
+        raw_bucket_name = props.raw_bucket_name
 
         # Log group
         log_group = logs.LogGroup(
@@ -42,15 +50,16 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
         get_active_tables = tasks.LambdaInvoke(
             self,
             "GetActiveTables",
-            lambda_function=props.get_active_tables_fn,
-            payload_response_only=False,
+            lambda_function=get_active_tables_fn,
+            # payload_response_only=False,
             result_selector={
                 "count.$": "$.Payload.count",
                 "sfn_view.$": "$.Payload.sfn_view",
                 "tables.$": "$.Payload.tables",
             },
             result_path="$.active",
-            payload=sfn.TaskInput.from_object({"Payload.$": "$"}),
+            # payload=sfn.TaskInput.from_object({"Payload.$": "$"}),
+            integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
         )
 
         # retries and catch (mirror JSON)
@@ -73,7 +82,7 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
                 "Type": "Task",
                 "Resource": "arn:aws:states:::aws-sdk:sns:publish",
                 "Parameters": {
-                    "TopicArn": props.failure_topic.topic_arn,
+                    "TopicArn": failure_topic.topic_arn,
                     "Subject": "Pipeline FALLÓ al iniciar",
                     "Message.$": "States.Format('Fallo al obtener tablas activas. ExecId={}', $$.Execution.Id)",
                 },
@@ -91,8 +100,8 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
         ingest_map = sfn.Map(
             self,
             "IngestMap",
-            items_path=props.map_items_path,
-            max_concurrency=props.max_map_concurrency,
+            items_path= "$.active.sfn_view",
+            max_concurrency=10,
             parameters={
                 "table.$": "$$.Map.Item.Value",
                 "execStart.$": "$$.Execution.StartTime",
@@ -105,10 +114,11 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
         get_origin_params = tasks.LambdaInvoke(
             self,
             "GetOriginParams",
-            lambda_function=props.get_origin_params_fn,
-            payload_response_only=True,
+            lambda_function=get_origin_params_fn,
+            # payload_response_only=True,
             result_path="$.origin",
             payload=sfn.TaskInput.from_object({"idConfigOrigen.$": "$.table.idConfigOrigen"}),
+            integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
         )
 
         # IsIncremental choice (nombreCampoPivot == "-")
@@ -118,8 +128,8 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
         audit_start_incr = tasks.LambdaInvoke(
             self,
             "AuditStartIncr",
-            lambda_function=props.sql_runner_fn,
-            payload_response_only=True,
+            lambda_function=sql_runner_fn,
+            # payload_response_only=True,
             result_path="$.auditStart",
             payload=sfn.TaskInput.from_object({
                 "action": "call",
@@ -138,14 +148,15 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
                     "sistemaFuente.$": "$.table.nombreCarpetaDL",
                 },
             }),
+            integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
         )
 
         # AuditStartFull (tipoCarga=0)
         audit_start_full = tasks.LambdaInvoke(
             self,
             "AuditStartFull",
-            lambda_function=props.sql_runner_fn,
-            payload_response_only=True,
+            lambda_function=sql_runner_fn,
+            # payload_response_only=True,
             result_path="$.auditStart",
             payload=sfn.TaskInput.from_object({
                 "action": "call",
@@ -164,20 +175,21 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
                     "sistemaFuente.$": "$.table.nombreCarpetaDL",
                 },
             }),
+            integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
         )
 
         # GlueCopyFull (sync)
         glue_copy_full = tasks.GlueStartJobRun(
             self,
             "GlueCopyFull",
-            glue_job_name=props.glue_extractcopy_job_name,
+            glue_job_name=glue_extractcopy_job_name,
             integration_pattern=sfn.IntegrationPattern.RUN_JOB,
             arguments=sfn.TaskInput.from_object({
                 "--mode": "full",
                 "--sql_query.$": "$.table.query",
                 "--pivot_type": "none",
-                "--output_prefix.$": "States.Format('s3://dl-raw-dev-s3/data/{}/{}/{}/{}/', $.table.nombreInstancia, $.table.nombreBaseDatos, $.table.nombreCarpetaDL, $.table.nombreTabla)",
-                "--metrics_path.$": "States.Format('s3://dl-raw-dev-s3/temp/metrics/data/{}/{}/{}/{}/', $.table.nombreInstancia, $.table.nombreBaseDatos, $.table.nombreCarpetaDL, $.table.nombreTabla)",
+                "--output_prefix.$": f"States.Format('s3://{raw_bucket_name}/data/{{}}/{{}}/{{}}/{{}}/', $.table.nombreInstancia, $.table.nombreBaseDatos, $.table.nombreCarpetaDL, $.table.nombreTabla)",
+                "--metrics_path.$": f"States.Format('s3://{raw_bucket_name}/temp/metrics/data/{{}}/{{}}/{{}}/{{}}/', $.table.nombreInstancia, $.table.nombreBaseDatos, $.table.nombreCarpetaDL, $.table.nombreTabla)",
                 "--archivo_nombre.$": "States.Format('{}.parquet', States.ArrayGetItem(States.StringSplit(States.ArrayGetItem(States.StringSplit($.execStart, '.'), 0), 'Z'), 0))",
             }),
             result_path="$.glue",
@@ -197,13 +209,14 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
         get_pivot_audit = tasks.LambdaInvoke(
             self,
             "GetPivotAudit",
-            lambda_function=props.sql_runner_fn,
-            payload_response_only=True,
+            lambda_function=sql_runner_fn,
+            # payload_response_only=True,
             result_path="$.pivotAudit",
             payload=sfn.TaskInput.from_object({
                 "action": "select_one",
                 "sql": "SELECT valorPivot FROM dbo.controlPipelineLight_gen2 WHERE nombreTabla = 'dbo.XYZ' AND estado = 1 ORDER BY fechaInsertUpdate DESC LIMIT 1",
             }),
+            integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
         )
 
         get_pivot_audit.add_retry(
@@ -217,7 +230,7 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
         glue_copy_incr = tasks.GlueStartJobRun(
             self,
             "GlueCopyIncr",
-            glue_job_name=props.glue_extractcopy_job_name,
+            glue_job_name=glue_extractcopy_job_name,
             integration_pattern=sfn.IntegrationPattern.RUN_JOB,
             arguments=sfn.TaskInput.from_object({
                 "--mode": "incr",
@@ -225,8 +238,8 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
                 "--pivot_from.$": "$.pivotAudit.Payload.value",
                 "--pivot_type.$": "$.table.tipoCampoPivot",
                 "--pivot_column.$": "$.table.nombreCampoPivot",
-                "--output_prefix.$": "States.Format('s3://dl-raw-dev-s3/data/{}/{}/{}/{}/', $.table.nombreInstancia, $.table.nombreBaseDatos, $.table.nombreCarpetaDL, $.table.nombreTabla)",
-                "--metrics_path.$": "States.Format('s3://dl-raw-dev-s3/temp/metrics/data/{}/{}/{}/{}/', $.table.nombreInstancia, $.table.nombreBaseDatos, $.table.nombreCarpetaDL, $.table.nombreTabla)",
+                "--output_prefix.$": f"States.Format('s3://{raw_bucket_name}/data/{{}}/{{}}/{{}}/{{}}/', $.table.nombreInstancia, $.table.nombreBaseDatos, $.table.nombreCarpetaDL, $.table.nombreTabla)",
+                "--metrics_path.$": f"States.Format('s3://{raw_bucket_name}/temp/metrics/data/{{}}/{{}}/{{}}/{{}}/', $.table.nombreInstancia, $.table.nombreBaseDatos, $.table.nombreCarpetaDL, $.table.nombreTabla)",
                 "--archivo_nombre.$": "States.Format('{}.parquet', States.ArrayGetItem(States.StringSplit(States.ArrayGetItem(States.StringSplit($.execStart, '.'), 0), 'Z'), 0))",
             }),
             result_path="$.glue",
@@ -243,12 +256,13 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
         read_metrics = tasks.LambdaInvoke(
             self,
             "ReadMetrics",
-            lambda_function=props.read_metrics_fn,
-            payload_response_only=True,
+            lambda_function=read_metrics_fn,
+            # payload_response_only=True,
             result_path="$.metrics",
             payload=sfn.TaskInput.from_object({
-                "metrics_path.$": "States.Format('s3://dl-raw-dev-s3/temp/metrics/data/{}/{}/{}/{}/', $.table.nombreInstancia, $.table.nombreBaseDatos, $.table.nombreCarpetaDL, $.table.nombreTabla)"
+                "metrics_path.$": f"States.Format('s3://{raw_bucket_name}/temp/metrics/data/{{}}/{{}}/{{}}/{{}}/', $.table.nombreInstancia, $.table.nombreBaseDatos, $.table.nombreCarpetaDL, $.table.nombreTabla)"
             }),
+            integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
         )
 
         read_metrics.add_retry(
@@ -262,8 +276,8 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
         audit_success = tasks.LambdaInvoke(
             self,
             "AuditSuccess",
-            lambda_function=props.sql_runner_fn,
-            payload_response_only=True,
+            lambda_function=sql_runner_fn,
+            # payload_response_only=True,
             result_path="$.auditEnd",
             payload=sfn.TaskInput.from_object({
                 "action": "call",
@@ -281,6 +295,7 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
                     "cantidadRegistrosTotales.$": "$.metrics.Payload.total_source",
                 },
             }),
+            integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
         )
 
         # AuditFail parallel (UpdFail + NotifyFail)
@@ -288,8 +303,8 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
         upd_fail = tasks.LambdaInvoke(
             self,
             "UpdFail",
-            lambda_function=props.sql_runner_fn,
-            payload_response_only=True,
+            lambda_function=sql_runner_fn,
+            # payload_response_only=True,
             payload=sfn.TaskInput.from_object({
                 "action": "call",
                 "sql": "CALL dbo.usp_upd_ejecucion_light_gen2(:tablaNombre::varchar,:valorPivot::varchar,:estado::int,:fechaFin::timestamp,:archivoDestino::varchar,:fechaInsertUpdate::timestamp,:runID::varchar,:cantidadRegistros::int,:sistemaFuente::varchar,:cantidadRegistrosTotales::int);",
@@ -307,6 +322,7 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
                 },
             }),
             result_path=sfn.JsonPath.DISCARD,
+            integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
         )
 
         # NotifyFail (SNS publish)
@@ -317,7 +333,7 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
                 "Type": "Task",
                 "Resource": "arn:aws:states:::aws-sdk:sns:publish",
                 "Parameters": {
-                    "TopicArn": props.failure_topic.topic_arn,
+                    "TopicArn": failure_topic.topic_arn,
                     "Subject": "finandina-dev Ingesta FALLIDA",
                     "Message.$": "States.Format('Tabla {} falló. ExecId={}', $.table.nombreTabla, $$.Execution.Id)",
                 },
@@ -361,7 +377,7 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
         run_finandina_bpmpro = tasks.GlueStartJobRun(
             self,
             "RunFinandinaBPMPro",
-            glue_job_name=props.glue_bpmpro_job_name,
+            glue_job_name=glue_bpmpro_job_name,
             integration_pattern=sfn.IntegrationPattern.RUN_JOB,
         )
 
@@ -373,7 +389,7 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
                 "Type": "Task",
                 "Resource": "arn:aws:states:::aws-sdk:sns:publish",
                 "Parameters": {
-                    "TopicArn": props.failure_topic.topic_arn,
+                    "TopicArn": failure_topic.topic_arn,
                     "Subject": "FinandinaBPMPro (Glue) FALLÓ",
                     "Message.$": "States.Format('Glue FinandinaBPMPro falló. ExecId={}', $$.Execution.Id)",
                 },

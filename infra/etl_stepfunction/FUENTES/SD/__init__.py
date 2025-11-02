@@ -1,2 +1,1 @@
-from .tf_pl_Data_Ds_Asdwh_fa_Ds_To_file_txt import PlTxtTf, PlTxtTfProps
 from .sf_pl_Data_Ds_Asdwh_fa_Ds_To_file_txt import PlTxtSf, PlTxtSfProps

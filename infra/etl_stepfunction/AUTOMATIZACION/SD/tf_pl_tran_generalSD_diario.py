@@ -28,7 +28,7 @@ class EtlTfGeneralSDDiarioConstructProps:
 
 
 # --- Construct ---
-class EtlTfGenetalSDDiarioConstruct(Construct):
+class EtlTfGeneralSDDiarioConstruct(Construct):
     def __init__(self, scope: Construct, id: str, *, props: EtlTfGeneralSDDiarioConstructProps) -> None:
         super().__init__(scope, id)
 

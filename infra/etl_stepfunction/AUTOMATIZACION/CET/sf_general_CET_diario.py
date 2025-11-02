@@ -10,7 +10,7 @@ from aws_cdk import (
     aws_iam as iam,
 )
 from aws_cdk.aws_lambda import IFunction
-
+from aws_cdk.aws_sns import ITopic
 from ....utils.naming import create_name
 
 
@@ -26,7 +26,7 @@ class EtlSfGeneralCETDiarioConstructProps:
     job_master_to_analytics_load_cet: str
     bucket_result_rma01: str
     bucket_result_maa01: str
-    sns_topic_email_addresses: list[str]
+    failure_topic: ITopic
 
 
 class EtlSfGeneralCETDiarioConstruct(Construct):
@@ -43,7 +43,7 @@ class EtlSfGeneralCETDiarioConstruct(Construct):
         job_master_to_analytics_load_cet = props.job_master_to_analytics_load_cet
         bucket_result_rma01 = props.bucket_result_rma01
         bucket_result_maa01 = props.bucket_result_maa01
-        sns_topic_email_addresses = props.sns_topic_email_addresses
+        failure_topic = props.failure_topic
 
         # --- Step Function Tasks ---
         pre_update_task = tasks.LambdaInvoke(
@@ -51,6 +51,7 @@ class EtlSfGeneralCETDiarioConstruct(Construct):
             "Pre-update Comprehensive Catalogue",
             lambda_function=pre_update_lambda,
             result_path="$.EvaluateRequestOutput",
+            integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
         )
 
         post_update_task1 = tasks.LambdaInvoke(
@@ -58,6 +59,7 @@ class EtlSfGeneralCETDiarioConstruct(Construct):
             "Post-update Comprehensive Catalogue 1",
             lambda_function=post_update_lambda,
             result_path="$.EvaluateRequestOutput",
+            integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
         )
 
         notify_failure_task = tasks.LambdaInvoke(
@@ -69,6 +71,7 @@ class EtlSfGeneralCETDiarioConstruct(Construct):
                 "ErrorInfo.$": "$.ErrorInfo",
             }),
             result_path="$.statusCode",
+            integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
         )
 
         run_job_task_raw_cet = tasks.GlueStartJobRun(
@@ -134,20 +137,10 @@ class EtlSfGeneralCETDiarioConstruct(Construct):
         )
         run_job_task_master_to_analytics_load_cet.add_retry(max_attempts=1, interval=Duration.seconds(60), backoff_rate=1)
 
-        # --- SNS Topic + Subscriptions ---
-        self.failure_topic = sns.Topic(
-            self,
-            "StepFunctionFailureTopic",
-            topic_name=create_name('sns-topic', 'CET-failure'),
-        )
-
-        for email in sns_topic_email_addresses:
-            self.failure_topic.add_subscription(subs.EmailSubscription(email))
-
         sns_publish_task = tasks.SnsPublish(
             self,
             "Send Failure Notification",
-            topic=self.failure_topic,
+            topic=failure_topic,
             message=sfn.TaskInput.from_object({
                 "Subject": f"[ALERTA] Fallo en el flujo de Step Function: {id}",
                 "Message.$": "States.Format('El flujo de Step Function ha fallado. Detalles del error: {}', $.ErrorInfo)",
@@ -155,13 +148,6 @@ class EtlSfGeneralCETDiarioConstruct(Construct):
         )
 
         # --- Step Function Definition ---
-        # main_flow = (
-        #     sfn.Chain.start(pre_update_task)
-        #     .next(run_job_task_raw_cet)
-        #     .next(run_job_task_raw_to_master_tra_cet)
-        #     .next(run_job_task_master_to_analytics_load_cet)
-        #     .next(post_update_task1)
-        # )
         main_flow = (
             sfn.Chain.start(run_job_task_raw_cet)
             .next(run_job_task_raw_to_master_tra_cet)
@@ -201,10 +187,19 @@ class EtlSfGeneralCETDiarioConstruct(Construct):
             ),
         )
 
-        # --- Permissions ---
+        # --- Permissions for State Machine Role ---
+        # Allow starting Glue jobs
+        self.state_machine.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["glue:StartJobRun"],
+                resources=["*"],
+            )
+        )
+
+        # Allow SNS Publish: specifically grant on the provided topic ARN
         self.state_machine.add_to_role_policy(
             iam.PolicyStatement(
                 actions=["sns:Publish"],
-                resources=[self.failure_topic.topic_arn],
+                resources=[failure_topic.topic_arn],
             )
         )

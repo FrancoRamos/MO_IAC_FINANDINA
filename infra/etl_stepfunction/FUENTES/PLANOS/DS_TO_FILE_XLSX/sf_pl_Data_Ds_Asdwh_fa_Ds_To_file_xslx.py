@@ -9,6 +9,7 @@ from aws_cdk import (
     aws_stepfunctions as sfn,
     aws_stepfunctions_tasks as tasks,
 )
+from .....utils.naming import create_name
 
 
 @dataclass
@@ -21,7 +22,7 @@ class SfProps:
     export_prefix: str                      # 'finandina/planos/dwh/taximetro/'
     redshift_database: str                  # p.ej. 'asdwh'
     redshift_secret_arn: str                # ARN del secret con credenciales Redshift
-    notifications_topic: sns.ITopic         # topic del stack tf-
+    failure_topic: sns.ITopic         # topic del stack tf-
     redshift_workgroup_name: str | None = None
     cluster_identifier: str | None = None
     redshift_unload_role_arn: str | None = None
@@ -104,11 +105,11 @@ class PlXlsxSf(Construct):
             service="sns",
             action="publish",
             parameters={
-                "TopicArn": props.notifications_topic.topic_arn,
+                "TopicArn": props.failure_topic.topic_arn,
                 "Subject": "Fallo en pl_Data_Ds_Asdwh_fa_Ds_To_file_xlsx",
                 "Message": sfn.JsonPath.string_at("$.Error"),
             },
-            iam_resources=[props.notifications_topic.topic_arn],
+            iam_resources=[props.failure_topic.topic_arn],
         )
         failure_chain = capture.next(notify)
 
@@ -161,6 +162,7 @@ class PlXlsxSf(Construct):
         self.state_machine = sfn.StateMachine(
             self,
             "SM_pl_Data_Ds_Asdwh_fa_Ds_To_file_xlsx",
+            state_machine_name=create_name('sfn', 'pl-Data-Ds-Asdwh-fa-Ds-To-file-xlsx'),
             role=props.sfn_role,
             definition_body=sfn.DefinitionBody.from_chainable(definition),
             timeout=Duration.hours(2),

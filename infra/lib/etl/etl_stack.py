@@ -4,7 +4,10 @@ from constructs import Construct
 from dataclasses import dataclass
 
 from aws_cdk import aws_lambda as _lambda
-from aws_cdk import aws_s3_deployment as s3_deployment
+from aws_cdk import aws_s3_deployment as s3_deployment, aws_sns_subscriptions as subs
+from aws_cdk import aws_sns as sns
+from aws_cdk import aws_iam as iam
+from aws_cdk import RemovalPolicy
 import os
 
 from infra.constructs.cdk_storage import StorageConstruct
@@ -16,10 +19,9 @@ from infra.etl_stepfunction.BASE import EtlSfBaseConstruct, EtlSfBaseConstructPr
 from infra.etl_stepfunction.AUTOMATIZACION.CET import EtlTfGeneralCETDiarioConstruct, EtlTfGeneralCETDiarioConstructProps
 from infra.etl_stepfunction.AUTOMATIZACION.CET import EtlSfGeneralCETDiarioConstruct, EtlSfGeneralCETDiarioConstructProps
 
-from infra.etl_stepfunction.COBRANZA.PLANO_MAYOR import PlanoMayorTf, PlanoMayorTfProps
-from infra.etl_stepfunction.COBRANZA.PLANO_MAYOR import PlanoMayorSf, PlanoMayorSfProps
+from infra.etl_stepfunction.COBRANZA.PLANO_MAYOR.CARGA_PLANO_DWH import EtlTfCargaPlanoDWHConstruct, EtlTfCargaPlanoDWHConstructProps
+from infra.etl_stepfunction.COBRANZA.PLANO_MAYOR.CARGA_PLANO_DWH import EtlSfCargaPlanoDWHConstruct, EtlSfCargaPlanoDWHConstructProps
 
-from infra.etl_stepfunction.FUENTES.SD import PlTxtTf, PlTxtTfProps
 from infra.etl_stepfunction.FUENTES.SD import PlTxtSf, PlTxtSfProps
 
 from infra.etl_stepfunction.FUENTES.PLANOS.DS_TO_FILE_XLSX import PlXlsxTf, TfProps
@@ -28,8 +30,8 @@ from infra.etl_stepfunction.FUENTES.PLANOS.DS_TO_FILE_XLSX import PlXlsxSf, SfPr
 from infra.etl_stepfunction.FUENTES.FIVE9.ADLS_CET_FIVE9 import EtlTfAdlsCetFive9Construct, EtlTfAdlsCetFive9ConstructProps
 from infra.etl_stepfunction.FUENTES.FIVE9.ADLS_CET_FIVE9 import EtlSfAdlsCetFive9Construct, EtlSfAdlsCetFive9ConstructProps
 
-from infra.etl_stepfunction.AUTOMATIZACION.SD import EtlTfGenetalSDDiarioConstruct, EtlTfGeneralSDDiarioConstructProps
-from infra.etl_stepfunction.AUTOMATIZACION.SD import EtlSfGenetalSDDiarioConstruct, EtlSfGenetalSDDiarioConstructProps
+from infra.etl_stepfunction.AUTOMATIZACION.SD import EtlTfGeneralSDDiarioConstruct, EtlTfGeneralSDDiarioConstructProps
+from infra.etl_stepfunction.AUTOMATIZACION.SD import EtlSfGeneralSDDiarioConstruct, EtlSfGenetalSDDiarioConstructProps
 
 from infra.etl_stepfunction.FUENTES.FABOGRIESGO.ADLS_ALERTASFRAUDE import EtlSfAdlsFaboAlertasFraudeConstruct, EtlSfAdlsFaboAlertasFraudeConstructProps
 
@@ -76,6 +78,49 @@ class EtlStack(Stack):
             sources=[s3_deployment.Source.asset(os.path.join(os.path.dirname(os.path.dirname(__file__)), "../etl_glue_jobs"))],
             destination_bucket=storage.scripts_bucket,
         )  
+
+
+        # --- Notification emails ---
+        email_addresses = [
+            # "ocastro@morrisopazo.com",
+            # "mmolina@morrisopazo.com",
+            # TODO
+            "jtorres@morrisopazo.com"
+        ]
+        # --- SNS Topic + Subscriptions ---
+        self.failure_topic = sns.Topic(
+            self,
+            "StepFunctionFailureTopic",
+            topic_name=create_name('sns-topic', 'failure'),
+        )
+        self.failure_topic.apply_removal_policy(RemovalPolicy.DESTROY) #TODO
+        
+        self.failure_topic.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="__default_statement_ID",
+                effect=iam.Effect.ALLOW,
+                principals=[iam.ArnPrincipal("*")],
+                actions=[
+                    "SNS:GetTopicAttributes",
+                    "SNS:SetTopicAttributes",
+                    "SNS:AddPermission",
+                    "SNS:RemovePermission",
+                    "SNS:DeleteTopic",
+                    "SNS:Subscribe",
+                    "SNS:ListSubscriptionsByTopic",
+                    "SNS:Publish"
+                ],
+                resources=[self.failure_topic.topic_arn],
+                conditions={
+                    "StringEquals": {
+                        "AWS:SourceOwner": context_env.accountId
+                    }
+                }
+            )
+        )
+        
+        for email in email_addresses:
+            self.failure_topic.add_subscription(subs.EmailSubscription(email))
 
 
         # --- Etl Base Transform ---
@@ -126,57 +171,6 @@ class EtlStack(Stack):
         )
 
 
-        # --- Notification emails ---
-        email_addresses = [
-            # "ocastro@morrisopazo.com",
-            # "mmolina@morrisopazo.com",
-            # TODO
-            "jtorres@morrisopazo.com"
-        ]
-
-
-        # --- CET Diario Transform ---
-        etl_tf_cet_diario_props = EtlTfGeneralCETDiarioConstructProps(
-            environment=context_env.environment,
-            raw_bucket=storage.raw_bucket,
-            master_bucket=storage.master_bucket,
-            scripts_bucket=storage.scripts_bucket,
-            raw_database=props.raw_database_name,
-            master_database=props.master_database_name,
-            datalake_lib_layer_arn=props.datalake_lib_layer.layer_version_arn,
-            lambda_execution_role=security.lambdaExecutionRole,
-            job_role=security.lakeFormationRole,
-            kms_key=security.kmsKey,
-        )
-
-        etl_tf_cet_diario = EtlTfGeneralCETDiarioConstruct(
-            self,
-            "EtlTfGenetalCETDiario",
-            props=etl_tf_cet_diario_props,
-        )
-
-        # --- CET Diario Step Function ---
-        etl_sf_general_cet_diario_props = EtlSfGeneralCETDiarioConstructProps(
-            environment=context_env.environment,
-            region=context_env.region,
-            pre_update_lambda=etl_tf_base.preupdate_lambda,
-            post_update_lambda=etl_tf_base.postupdate_lambda,
-            error_lambda=etl_tf_base.error_lambda,
-            bucket_result_rma01=storage.master_bucket.bucket_name,
-            bucket_result_maa01=storage.analytics_bucket.bucket_name,
-            job_raw_cet=etl_tf_cet_diario.job_raw_cet,
-            job_raw_to_master_tra_cet=etl_tf_cet_diario.job_raw_to_master_tra_cet,
-            job_master_to_analytics_load_cet=etl_tf_cet_diario.job_master_to_analytics_load_cet,
-            sns_topic_email_addresses=email_addresses,
-        )
-
-        etl_sf_general_cet_diario = EtlSfGeneralCETDiarioConstruct(
-            self,
-            "EtlSfGeneralCETDiario",
-            props=etl_sf_general_cet_diario_props,
-        )
-
-
         # --- Five9 Fuente Transform ---
         etl_tf_five9_props = EtlTfAdlsCetFive9ConstructProps(
             environment=context_env.environment,
@@ -215,48 +209,6 @@ class EtlStack(Stack):
         )
 
 
-        # --- Cobranza Plano Mayor Transform ---
-        plano_mayor_script_path = "infra/etl_glue_jobs/COBRANZAS/Gold/etl_load_synapse_planoMayor.py"
-        plano_mayor_job_name = create_name("glue", "cobranzas-plano-mayor")  #"glue-cobranzas-plano-mayor"
-
-        plano_mayor_tf_props = PlanoMayorTfProps(
-            script_path=plano_mayor_script_path,
-            alert_emails=email_addresses,
-            job_name=plano_mayor_job_name,
-            job_role=security.lakeFormationRole,
-        )
-
-        plano_mayor_tf = PlanoMayorTf(
-            self,
-            "CobranzaPlanoMayorTF",
-            props=plano_mayor_tf_props,
-        )
-
-        # --- Cobranza Plano Mayor Step Function ---
-        plano_mayor_sf_props = PlanoMayorSfProps(
-            job_name=plano_mayor_tf.job_name,
-            failure_topic=plano_mayor_tf.failure_topic,
-        )
-
-        plano_mayor_sf = PlanoMayorSf(
-            self,
-            "CobranzaPlanoMayorSF",
-            props=plano_mayor_sf_props,
-        )
-
-
-        # --- Fuente Experian (SD) Transform ---
-        sd_txt_tf_props = PlTxtTfProps(
-            environment=context_env.environment,
-            alert_emails=email_addresses,
-        )
-
-        sd_txt_tf = PlTxtTf(
-            self,
-            "SdBaseExperianTF",
-            props=sd_txt_tf_props,
-        )
-
         # --- Fuente Experian (SD) Step Function ---
         sd_txt_sf_props = PlTxtSfProps(
                 environment=context_env.environment,
@@ -264,7 +216,7 @@ class EtlStack(Stack):
                 database="dl_dev",
                 db_user_secret_arn=props.redshift_secret_arn,
                 s3_prefix_uri=f"s3://{storage.master_bucket.bucket_name}/Finandina/Planos/Experian/Input/BaseExperian_",
-                failure_topic=sd_txt_tf.failure_topic,
+                failure_topic=self.failure_topic,
             )
 
         sd_txt_sf = PlTxtSf(
@@ -297,7 +249,7 @@ class EtlStack(Stack):
                 redshift_database="dl_dev",
                 redshift_secret_arn=props.redshift_secret_arn,
                 redshift_workgroup_name="dl-workgroup-dev-rs",
-                notifications_topic=pl_xlsx_tf.topic,
+                failure_topic=self.failure_topic,
             )
 
         pl_xlsx_sf = PlXlsxSf(
@@ -309,6 +261,78 @@ class EtlStack(Stack):
         # ======================================================================================
         # ======================================================================================
 
+        # --- CET Diario Transform ---
+        etl_tf_cet_diario_props = EtlTfGeneralCETDiarioConstructProps(
+            environment=context_env.environment,
+            raw_bucket=storage.raw_bucket,
+            master_bucket=storage.master_bucket,
+            scripts_bucket=storage.scripts_bucket,
+            raw_database=props.raw_database_name,
+            master_database=props.master_database_name,
+            datalake_lib_layer_arn=props.datalake_lib_layer.layer_version_arn,
+            lambda_execution_role=security.lambdaExecutionRole,
+            job_role=security.lakeFormationRole,
+            kms_key=security.kmsKey,
+        )
+
+        etl_tf_cet_diario = EtlTfGeneralCETDiarioConstruct(
+            self,
+            "EtlTfGenetalCETDiario",
+            props=etl_tf_cet_diario_props,
+        )
+
+        # --- CET Diario Step Function ---
+        etl_sf_general_cet_diario_props = EtlSfGeneralCETDiarioConstructProps(
+            environment=context_env.environment,
+            region=context_env.region,
+            pre_update_lambda=etl_tf_base.preupdate_lambda,
+            post_update_lambda=etl_tf_base.postupdate_lambda,
+            error_lambda=etl_tf_base.error_lambda,
+            bucket_result_rma01=storage.master_bucket.bucket_name,
+            bucket_result_maa01=storage.analytics_bucket.bucket_name,
+            job_raw_cet=etl_tf_cet_diario.job_raw_cet,
+            job_raw_to_master_tra_cet=etl_tf_cet_diario.job_raw_to_master_tra_cet,
+            job_master_to_analytics_load_cet=etl_tf_cet_diario.job_master_to_analytics_load_cet,
+            failure_topic=self.failure_topic,
+        )
+
+        etl_sf_general_cet_diario = EtlSfGeneralCETDiarioConstruct(
+            self,
+            "EtlSfGeneralCETDiario",
+            props=etl_sf_general_cet_diario_props,
+        )
+
+
+        # --- Cobranza Carga Plano DWH Transform ---
+        plano_mayor_tf_props = EtlTfCargaPlanoDWHConstructProps(
+            environment=context_env.environment,
+            project=context_env.project,
+            scripts_bucket=storage.scripts_bucket,
+            job_role=security.lakeFormationRole,
+            lambda_execution_role=security.lambdaExecutionRole,
+        )
+
+        plano_mayor_tf = EtlTfCargaPlanoDWHConstruct(
+            self,
+            "CobranzaPlanoMayorTF",
+            props=plano_mayor_tf_props,
+        )
+
+        # --- Cobranza Carga Plano DWH Step Function ---
+        plano_mayor_sf_props = EtlSfCargaPlanoDWHConstructProps(
+            environment=context_env.environment,
+            job_carga_plano_dwh_name=plano_mayor_tf.job_carga_plano_dwh_name,
+            carga_plano_dwh_lambda= plano_mayor_tf.carga_plano_dwh_lambda,
+            failure_topic=self.failure_topic,
+        )
+
+        plano_mayor_sf = EtlSfCargaPlanoDWHConstruct(
+            self,
+            "CobranzaPlanoMayorSF",
+            props=plano_mayor_sf_props,
+        )
+
+
         # --- Automatizacion SD Diario Transform ---
         etl_tf_sd_diario_props = EtlTfGeneralSDDiarioConstructProps(
             environment=context_env.environment,
@@ -318,7 +342,7 @@ class EtlStack(Stack):
             kms_key=security.kmsKey,
         )
 
-        etl_tf_sd_diario = EtlTfGenetalSDDiarioConstruct(
+        etl_tf_sd_diario = EtlTfGeneralSDDiarioConstruct(
             self,
             "EtlTfGeneralSDDiario",
             props=etl_tf_sd_diario_props,
@@ -334,17 +358,17 @@ class EtlStack(Stack):
             master_bucket=storage.master_bucket,
             raw_database=props.raw_database_name,
             master_database=props.master_database_name,
-            sns_topic_email_addresses=email_addresses,
+            failure_topic=self.failure_topic,
         )
 
-        etl_sf_sd_diario = EtlSfGenetalSDDiarioConstruct(
+        etl_sf_sd_diario = EtlSfGeneralSDDiarioConstruct(
             self,
             "EtlSfGeneralSDDiario",
             props=etl_sf_sd_diario_props,
         )
         
         
-        # --- Fuentes Faboriesgo ADSL Agil Step Function ---
+        # --- Fuentes Faboriesgo Alertas Fraude Step Function ---
         etl_sf_fabo_alertasfraude_props = EtlSfAdlsFaboAlertasFraudeConstructProps(
             environment=context_env.environment,
             get_active_tables_fn=etl_tf_base.get_active_tables_lambda,
@@ -354,6 +378,7 @@ class EtlStack(Stack):
             glue_extractcopy_job_name=etl_tf_base.job_extract_copy_name,
             glue_tdc_job_name=etl_tf_base.job_tdc_name,
             failure_topic=etl_tf_base.sns_failure_topic,
+            raw_bucket_name=storage.raw_bucket.bucket_name,
         )
 
         etl_sf_fabo_alertasfraude = EtlSfAdlsFaboAlertasFraudeConstruct(
@@ -386,6 +411,7 @@ class EtlStack(Stack):
             glue_extractcopy_job_name=etl_tf_base.job_extract_copy_name,
             glue_bpmpro_job_name=etl_tf_fabo_agil.job_bpmpro_name,
             failure_topic=etl_tf_base.sns_failure_topic,
+            raw_bucket_name=storage.raw_bucket.bucket_name,
         )
 
         etl_sf_fabo_agil = EtlSfAdlsFaboAgilConstruct(
@@ -417,6 +443,7 @@ class EtlStack(Stack):
             glue_extractcopy_job_name=etl_tf_base.job_extract_copy_name,
             glue_gestioncliente_job_name=etl_tf_fabo_gestion_cliente.job_gestioncliente_name,
             failure_topic=etl_tf_base.sns_failure_topic,
+            raw_bucket_name=storage.raw_bucket.bucket_name,
         )
 
         etl_sf_fabo_agil = EtlSfAdlsFaboGestionClienteConstruct(
@@ -448,6 +475,7 @@ class EtlStack(Stack):
             glue_extractcopy_job_name=etl_tf_base.job_extract_copy_name,
             glue_insumos_as400_job_name=etl_tf_fabo_insumos_as400.job_insumos_as400_name,
             failure_topic=etl_tf_base.sns_failure_topic,
+            raw_bucket_name=storage.raw_bucket.bucket_name,
         )
 
         etl_sf_fabo_insumos_as400 = EtlSfAdlsFaboInsumosAs400Construct(
@@ -466,6 +494,7 @@ class EtlStack(Stack):
             read_metrics_fn=etl_tf_base.read_metrics_lambda,
             glue_extractcopy_job_name=etl_tf_base.job_extract_copy_name,
             failure_topic=etl_tf_base.sns_failure_topic,
+            raw_bucket_name=storage.raw_bucket.bucket_name,
         )
 
         etl_sf_fabo_vehiculos_bic = EtlSfAdlsFaboVehiculosBic(

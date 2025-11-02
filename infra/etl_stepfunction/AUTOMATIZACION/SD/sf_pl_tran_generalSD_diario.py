@@ -11,7 +11,7 @@ from aws_cdk import (
 )
 from aws_cdk.aws_lambda import IFunction
 from aws_cdk.aws_s3 import Bucket
-
+from aws_cdk.aws_sns import ITopic
 from ....utils.naming import create_name
 
 
@@ -25,10 +25,10 @@ class EtlSfGenetalSDDiarioConstructProps:
     master_bucket: Bucket
     raw_database: str
     master_database: str
-    sns_topic_email_addresses: list[str]
+    failure_topic: ITopic
 
 
-class EtlSfGenetalSDDiarioConstruct(Construct):
+class EtlSfGeneralSDDiarioConstruct(Construct):
     def __init__(self, scope: Construct, id: str, *, props: EtlSfGenetalSDDiarioConstructProps) -> None:
         super().__init__(scope, id)
 
@@ -40,7 +40,7 @@ class EtlSfGenetalSDDiarioConstruct(Construct):
         master_bucket = props.master_bucket
         raw_database = props.raw_database
         master_database = props.master_database
-        sns_topic_email_addresses = props.sns_topic_email_addresses
+        failure_topic = props.failure_topic
 
 
         # 1) RunGlueLoadSD (GlueStartJobRun) - arguments read from $.config.*
@@ -50,7 +50,7 @@ class EtlSfGenetalSDDiarioConstruct(Construct):
             glue_job_name=job_load_sd,
             integration_pattern=sfn.IntegrationPattern.RUN_JOB,
             arguments=sfn.TaskInput.from_object({
-                "--bronze_db.$": "$.config.bronze_db", #  raw_database, #
+                "--bronze_db.$": "$.config.bronze_db",
                 "--s3_gold_root.$": "$.config.s3_gold_root",
                 "--redshift_write_mode.$": "$.config.redshift_write_mode",
                 "--redshift_tmp_dir.$": "$.config.redshift_tmp_dir",
@@ -92,6 +92,7 @@ class EtlSfGenetalSDDiarioConstruct(Construct):
                 "statementName": "uspLoad_Automatizacion",
             }),
             result_path="$.sp",
+            integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
         )
         exec_usp_automatizacion.add_retry(max_attempts=2, interval=Duration.seconds(30), backoff_rate=1)
 
@@ -112,14 +113,14 @@ class EtlSfGenetalSDDiarioConstruct(Construct):
         # --- Chain & Catch/Next wiring ---
         # Glue catch -> NotifyGoldFail (which ends)
         run_glue_load_sd.add_catch(
-            handler=notify_gold_fail.next(sfn.Fail(self, "GlueJobFailed")),
+            handler=notify_gold_fail,
             errors=["States.ALL"],
             result_path="$.error",
         )
 
         # Lambda catch -> NotifyDimFail (which ends)
         exec_usp_automatizacion.add_catch(
-            handler=notify_dim_fail.next(sfn.Fail(self, "StoredProcFailed")),
+            handler=notify_dim_fail,
             errors=["States.ALL"],
             result_path="$.error",
         )
@@ -157,32 +158,14 @@ class EtlSfGenetalSDDiarioConstruct(Construct):
         self.state_machine.add_to_role_policy(
             iam.PolicyStatement(
                 actions=["glue:StartJobRun"],
-                resources=["*"],  # tighten if you can construct specific Glue job ARNs
+                resources=["*"],
             )
         )
 
-        # Allow SNS Publish (CallAwsService uses IAM; give region-wide topic publish)
+        # grant publish to the state machine role for the local topic too
         self.state_machine.add_to_role_policy(
             iam.PolicyStatement(
                 actions=["sns:Publish"],
-                resources=[f"arn:aws:sns:{region}:*:*"],
+                resources=[failure_topic.topic_arn],
             )
         )
-
-        # Optional: create a local SNS topic with email subscriptions if you want a topic managed by CDK as well.
-        if sns_topic_email_addresses:
-            self.failure_topic = sns.Topic(
-                self,
-                "LocalStepFunctionFailureTopic",
-                topic_name=create_name('sns-topic', 'SD-failure'),
-            )
-            for email in sns_topic_email_addresses:
-                self.failure_topic.add_subscription(subs.EmailSubscription(email))
-
-            # grant publish to the state machine role for the local topic too
-            self.state_machine.add_to_role_policy(
-                iam.PolicyStatement(
-                    actions=["sns:Publish"],
-                    resources=[self.failure_topic.topic_arn],
-                )
-            )
