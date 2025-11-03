@@ -11,7 +11,7 @@ from infra.utils.naming import create_name
 
 
 app = cdk.App()
-
+# prueba 
 # Context configuration (required)
 # config = app.node.try_get_context("config")
 # if not config:
