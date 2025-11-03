@@ -1,4 +1,3 @@
-# tf_general_CargaPlanoDwh.py
 from dataclasses import dataclass
 from constructs import Construct
 from aws_cdk import (

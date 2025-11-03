@@ -102,7 +102,7 @@ class EtlTfBaseConstruct(Construct):
             self,
             "PreUpdateLambda",
             function_name=create_name("lambda", "autom01-preupdate"),
-            runtime=_lambda.Runtime.PYTHON_3_9,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_asset(
                 os.path.join(os.path.dirname(__file__), "../../scripts/lambda/preupdate/src")
@@ -125,7 +125,7 @@ class EtlTfBaseConstruct(Construct):
             self,
             "PostUpdateLambda",
             function_name=create_name("lambda", "autom01-postupdate"),
-            runtime=_lambda.Runtime.PYTHON_3_9,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_asset(
                 os.path.join(os.path.dirname(__file__), "../../scripts/lambda/postupdate/src")
@@ -144,7 +144,7 @@ class EtlTfBaseConstruct(Construct):
             self,
             "ErrorLambda",
             function_name=create_name("lambda", "autom01-error"),
-            runtime=_lambda.Runtime.PYTHON_3_9,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_asset(
                 os.path.join(os.path.dirname(__file__), "../../scripts/lambda/error/src")
@@ -162,7 +162,7 @@ class EtlTfBaseConstruct(Construct):
             self,
             "SqlRunnerLambda",
             function_name=create_name("lambda", "sql-runner"),
-            runtime=_lambda.Runtime.PYTHON_3_9,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_asset(
                 os.path.join(os.path.dirname(__file__), "../../scripts/lambda/sql_runner/src")
@@ -170,7 +170,7 @@ class EtlTfBaseConstruct(Construct):
             role=lambda_execution_role,
             environment={
             },
-            layers=[datalake_lib_layer],
+            layers=[],
             memory_size=256,
             timeout=Duration.seconds(300),
         )
@@ -179,7 +179,7 @@ class EtlTfBaseConstruct(Construct):
             self,
             "ReadMetricsLambda",
             function_name=create_name("lambda", "read-metrics"),
-            runtime=_lambda.Runtime.PYTHON_3_9,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_asset(
                 os.path.join(os.path.dirname(__file__), "../../scripts/lambda/read_metrics/src")
@@ -187,7 +187,7 @@ class EtlTfBaseConstruct(Construct):
             role=lambda_execution_role,
             environment={
             },
-            layers=[datalake_lib_layer],
+            layers=[],
             memory_size=256,
             timeout=Duration.seconds(300),
         )
@@ -196,7 +196,7 @@ class EtlTfBaseConstruct(Construct):
             self,
             "GetActiveTablesLambda",
             function_name=create_name("lambda", "get-active-tables"),
-            runtime=_lambda.Runtime.PYTHON_3_9,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_asset(
                 os.path.join(os.path.dirname(__file__), "../../scripts/lambda/get_active_tables/src")
@@ -204,7 +204,7 @@ class EtlTfBaseConstruct(Construct):
             role=lambda_execution_role,
             environment={
             },
-            layers=[datalake_lib_layer],
+            layers=[],
             memory_size=256,
             timeout=Duration.seconds(300),
         )
@@ -213,7 +213,7 @@ class EtlTfBaseConstruct(Construct):
             self,
             "GetOriginParamsLambda",
             function_name=create_name("lambda", "get-origin-params"),
-            runtime=_lambda.Runtime.PYTHON_3_9,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_asset(
                 os.path.join(os.path.dirname(__file__), "../../scripts/lambda/get_origin_params/src")
@@ -221,7 +221,7 @@ class EtlTfBaseConstruct(Construct):
             role=lambda_execution_role,
             environment={
             },
-            layers=[datalake_lib_layer],
+            layers=[],
             memory_size=256,
             timeout=Duration.seconds(300),
         )

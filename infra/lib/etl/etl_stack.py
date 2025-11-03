@@ -46,6 +46,12 @@ from infra.etl_stepfunction.FUENTES.FABOGRIESGO.ADLS_INSUMOS_AS400 import EtlTfA
 
 from infra.etl_stepfunction.FUENTES.FABOGRIESGO.ADLS_VEHICULOS_BIC import EtlSfAdlsFaboVehiculosBic, EtlSfAdlsFaboVehiculosBicProps
 
+from infra.etl_stepfunction.FUENTES.FABOGSQL03 import EtlTfAdlsFabogsqlEsbdataConstruct, EtlTfAdlsFabogsqlEsbdataConstructProps
+from infra.etl_stepfunction.FUENTES.FABOGSQL03 import EtlSfAdlsFabogsqlEsbdataConstruct, EtlSfAdlsFabogsqlEsbdataConstructProps
+
+from infra.etl_stepfunction.DATABRICKS.BRONZE.SFC import EtlTfAdlsBronzeSfcConstruct, EtlTfAdlsBronzeSfcConstructProps
+from infra.etl_stepfunction.DATABRICKS.BRONZE.SFC import EtlSfAdlsBronzeSfcConstruct, EtlSfAdlsBronzeSfcConstructProps
+
 from ...utils.naming import create_name
 
 @dataclass
@@ -504,3 +510,64 @@ class EtlStack(Stack):
         )
 
         
+        # --- Fuentes Fabogsql ADSL Esbdata Transform ---
+        etl_tf_fabogsql_esbdata_props = EtlTfAdlsFabogsqlEsbdataConstructProps(
+            environment=context_env.environment,
+            project=context_env.project,
+            scripts_bucket=storage.scripts_bucket,
+            lambda_execution_role=security.lambdaExecutionRole,
+        )
+
+        etl_tf_fabogsql_esbdata = EtlTfAdlsFabogsqlEsbdataConstruct(
+            self,
+            "EtlTfFabogsqlEsbdata",
+            props=etl_tf_fabogsql_esbdata_props,
+        )
+
+        # --- Fuentes Fabogsql ADSL Esbdata Step Function ---
+        etl_sf_fabogsql_esbdata_props = EtlSfAdlsFabogsqlEsbdataConstructProps(
+            environment=context_env.environment,
+            lookup_fn=etl_tf_fabogsql_esbdata.lookup_lambda,
+            auditoria_inicio_fn=etl_tf_fabogsql_esbdata.auditoria_inicio_lambda,
+            copia_integra_fn=etl_tf_fabogsql_esbdata.copia_integra_lambda,
+            conteo_registros_fn=etl_tf_fabogsql_esbdata.conteo_registros_lambda,
+            auditoria_ok_fn=etl_tf_fabogsql_esbdata.auditoria_ok_lambda,
+            auditoria_ko_fn=etl_tf_fabogsql_esbdata.auditoria_ko_lambda,
+            failure_topic=etl_tf_base.sns_failure_topic,
+            raw_bucket_name=storage.raw_bucket.bucket_name,
+        )
+
+        etl_sf_fabogsql_esbdata = EtlSfAdlsFabogsqlEsbdataConstruct(
+            self,
+            "EtlSfFabogsqlEsbdata",
+            props=etl_sf_fabogsql_esbdata_props,
+        )
+        
+        
+        # --- Databricks Bronze SFC Transform ---
+        etl_tf_bronze_sfc_props = EtlTfAdlsBronzeSfcConstructProps(
+            environment=context_env.environment,
+            scripts_bucket=storage.scripts_bucket,
+            job_role=security.lakeFormationRole,
+            raw_bucket_name=storage.raw_bucket.bucket_name,
+            raw_database=props.raw_database_name,
+        )
+
+        etl_tf_bronze_sfc = EtlTfAdlsBronzeSfcConstruct(
+            self,
+            "EtlTfBronzeSFC",
+            props=etl_tf_bronze_sfc_props,
+        )
+
+        # --- Databricks Bronze SFC Step Function ---
+        etl_sf_bronze_sfc_props = EtlSfAdlsBronzeSfcConstructProps(
+            environment=context_env.environment,
+            job_bronze_sfc_name=etl_tf_bronze_sfc.job_bronze_sfc_name,
+            failure_topic=etl_tf_base.sns_failure_topic,
+        )
+
+        etl_sf_bronze_sfc = EtlSfAdlsBronzeSfcConstruct(
+            self,
+            "EtlSfBronzeSFC",
+            props=etl_sf_bronze_sfc_props,
+        )

@@ -67,7 +67,7 @@ class EtlTfGeneralSDDiarioConstruct(Construct):
             self,
             "RawSDLambda",
             function_name=create_name("lambda", "raw-sd"),
-            runtime=_lambda.Runtime.PYTHON_3_9,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_asset(
                 os.path.join(os.path.dirname(os.path.dirname(__file__)), "../../scripts/lambda/raw_sd/src")

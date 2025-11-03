@@ -44,7 +44,7 @@ class EtlTfAdlsCetFive9Construct(Construct):
             self,
             "lambdaLookUp1",
             function_name=create_name("lambda", "fuentes-adls-cet-five9-lambdalookup1"),
-            runtime=_lambda.Runtime.PYTHON_3_9,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_asset(
                 os.path.join(

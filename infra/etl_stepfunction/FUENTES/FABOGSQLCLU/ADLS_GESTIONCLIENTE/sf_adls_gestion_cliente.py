@@ -7,6 +7,7 @@ from aws_cdk import (
     aws_stepfunctions as sfn,
     aws_stepfunctions_tasks as tasks,
     Duration,
+    aws_iam as iam,
 )
 from .....utils.naming import create_name 
 
@@ -413,4 +414,21 @@ class EtlSfAdlsFaboGestionClienteConstruct(Construct):
             state_machine_name=create_name('sfn', 'fuentes-adls-gestion-cliente'),
             definition_body=sfn.DefinitionBody.from_chainable(definition),
             logs=sfn.LogOptions(destination=log_group, level=sfn.LogLevel.ALL, include_execution_data=True),
+        )
+
+        # --- Permissions for State Machine Role ---
+        # Allow starting Glue jobs
+        self.state_machine.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["glue:StartJobRun"],
+                resources=["*"],
+            )
+        )
+
+        # Allow SNS Publish: specifically grant on the provided topic ARN
+        self.state_machine.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["sns:Publish"],
+                resources=[failure_topic.topic_arn],
+            )
         )
