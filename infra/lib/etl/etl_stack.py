@@ -30,8 +30,13 @@ from infra.etl_stepfunction.FUENTES.PLANOS.DS_TO_FILE_XLSX import PlXlsxSf, SfPr
 from infra.etl_stepfunction.FUENTES.FIVE9.ADLS_CET_FIVE9 import EtlTfAdlsCetFive9Construct, EtlTfAdlsCetFive9ConstructProps
 from infra.etl_stepfunction.FUENTES.FIVE9.ADLS_CET_FIVE9 import EtlSfAdlsCetFive9Construct, EtlSfAdlsCetFive9ConstructProps
 
+from infra.etl_stepfunction.AUTOMATIZACION.SFC.CARGA import EtlTfCargaSFCConstruct, EtlTfCargaSFCConstructProps
+from infra.etl_stepfunction.AUTOMATIZACION.SFC.CARGA import EtlSfCargaSFCConstruct, EtlSfCargaSFCConstructProps
+
+
 from infra.etl_stepfunction.AUTOMATIZACION.SD import EtlTfGeneralSDDiarioConstruct, EtlTfGeneralSDDiarioConstructProps
 from infra.etl_stepfunction.AUTOMATIZACION.SD import EtlSfGeneralSDDiarioConstruct, EtlSfGenetalSDDiarioConstructProps
+
 
 from infra.etl_stepfunction.FUENTES.FABOGRIESGO.ADLS_ALERTASFRAUDE import EtlSfAdlsFaboAlertasFraudeConstruct, EtlSfAdlsFaboAlertasFraudeConstructProps
 
@@ -373,6 +378,43 @@ class EtlStack(Stack):
             props=etl_sf_sd_diario_props,
         )
         
+        # --- Carga SFC Transform ---
+        etl_tf_carga_sfc_props = EtlTfCargaSFCConstructProps(
+            environment=context_env.environment,
+            scripts_bucket=storage.scripts_bucket,
+            lambda_execution_role=security.lambdaExecutionRole,
+            job_role=security.lakeFormationRole,
+            kms_key=security.kmsKey,
+        )
+
+        etl_tf_carga_sfc = EtlTfCargaSFCConstruct(
+            self,
+            "EtlTfCargaSFC",
+            props=etl_tf_carga_sfc_props,
+        )
+        
+        # --- Carga SFC Step Function ---
+        etl_sf_carga_sfc_props = EtlSfCargaSFCConstructProps(
+            environment=context_env.environment,
+            region=context_env.region,
+            dim_lambda=etl_tf_carga_sfc.dim_lambda,
+            facts_lambda=etl_tf_carga_sfc.facts_lambda,
+            job_load_sd=etl_tf_carga_sfc.job_raw_name,
+            raw_bucket=storage.raw_bucket,
+            master_bucket=storage.master_bucket,
+            raw_database=props.raw_database_name,
+            master_database=props.master_database_name,
+            failure_topic=self.failure_topic,           
+
+        )
+
+        etl_sf_sd_diario = EtlSfCargaSFCConstruct(
+            self,
+            "EtlSfCargaSFC",
+            props=etl_sf_carga_sfc_props,
+        )
+
+
         
         # --- Fuentes Faboriesgo Alertas Fraude Step Function ---
         etl_sf_fabo_alertasfraude_props = EtlSfAdlsFaboAlertasFraudeConstructProps(
