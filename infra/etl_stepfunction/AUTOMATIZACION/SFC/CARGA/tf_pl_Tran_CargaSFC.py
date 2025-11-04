@@ -14,7 +14,7 @@ from aws_cdk.aws_kms import Key
 from aws_cdk.aws_iam import Role
 from constructs import Construct
 import os
-from ....utils.naming import create_name
+from .....utils.naming import create_name
 
 
 # --- Props ---
@@ -49,7 +49,7 @@ class EtlTfCargaSFCConstruct(Construct):
             command={
                 "name": "glueetl",
                 "pythonVersion": "3",
-                "scriptLocation": f"s3://{scripts_bucket.bucket_name}/SFC/etl_cargasfc.py",  ## ok nombre
+                "scriptLocation": f"s3://{scripts_bucket.bucket_name}/AUTOMATIZACION/SFC/etl_cargasfc.py",  ## ok nombre
             },
             execution_property={"maxConcurrentRuns": 3},
             default_arguments={
@@ -70,7 +70,7 @@ class EtlTfCargaSFCConstruct(Construct):
             runtime=_lambda.Runtime.PYTHON_3_12,
             handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_asset(
-                os.path.join(os.path.dirname(os.path.dirname(__file__)), "../../scripts/lambda/carga_sfc/src")
+                os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "../../scripts/lambda/carga_sfc/src")  
             ),
             role=lambda_execution_role,
             environment={},
@@ -79,14 +79,14 @@ class EtlTfCargaSFCConstruct(Construct):
             timeout=Duration.seconds(300),
         )
         
-        self.cargasfcfacts_lambda2 = _lambda.Function(
+        self.cargasfcfacts_lambda = _lambda.Function(
             self,
             "LambdauspLoad_Facts",
             function_name=create_name("lambda", "cargafacts-sfc"),
             runtime=_lambda.Runtime.PYTHON_3_12,
             handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_asset(
-                os.path.join(os.path.dirname(os.path.dirname(__file__)), "../../scripts/lambda/carga_sfc/src2")
+                os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "../../scripts/lambda/carga_sfc/src2")
             ),
             role=lambda_execution_role,
             environment={},

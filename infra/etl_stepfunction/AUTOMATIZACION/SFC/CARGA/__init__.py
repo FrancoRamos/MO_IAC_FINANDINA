@@ -1,2 +1,2 @@
 from .tf_pl_Tran_CargaSFC import EtlTfCargaSFCConstruct, EtlTfCargaSFCConstructProps
-from .tf_pl_Tran_CargaSFC import EtlTfCargaSFCConstruct, EtlTfCargaSFCConstructProps
+from .sf_pl_Tran_CargaSFC import EtlSfCargaSFCConstruct, EtlSfCargaSFCConstructProps

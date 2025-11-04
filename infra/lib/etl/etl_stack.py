@@ -397,14 +397,9 @@ class EtlStack(Stack):
         etl_sf_carga_sfc_props = EtlSfCargaSFCConstructProps(
             environment=context_env.environment,
             region=context_env.region,
-            dim_lambda=etl_tf_carga_sfc.dim_lambda,
-            facts_lambda=etl_tf_carga_sfc.facts_lambda,
-            job_load_sd=etl_tf_carga_sfc.job_raw_name,
-            raw_bucket=storage.raw_bucket,
-            master_bucket=storage.master_bucket,
-            raw_database=props.raw_database_name,
-            master_database=props.master_database_name,
-            failure_topic=self.failure_topic,           
+            dim_lambda=etl_tf_carga_sfc.cargasfcdim_lambda,
+            facts_lambda=etl_tf_carga_sfc.cargasfcfacts_lambda,
+            job_load_sd=etl_tf_carga_sfc.job_cargasfc_name,          
 
         )
 

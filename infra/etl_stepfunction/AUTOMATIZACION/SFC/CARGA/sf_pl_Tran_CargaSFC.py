@@ -12,7 +12,7 @@ from aws_cdk import (
 from aws_cdk.aws_lambda import IFunction
 from aws_cdk.aws_s3 import Bucket
 from aws_cdk.aws_sns import ITopic
-from ....utils.naming import create_name
+from .....utils.naming import create_name
 
 
 @dataclass
@@ -22,11 +22,7 @@ class EtlSfCargaSFCConstructProps:
     dim_lambda: IFunction
     facts_lambda: IFunction
     job_load_sd: str
-    raw_bucket: Bucket
-    master_bucket: Bucket
-    raw_database: str
-    master_database: str
-    failure_topic: ITopic
+    
 
 
 class EtlSfCargaSFCConstruct(Construct):
@@ -38,23 +34,19 @@ class EtlSfCargaSFCConstruct(Construct):
         dim_lambda = props.dim_lambda
         facts_lambda = props.facts_lambda
         job_load_sd = props.job_load_sd
-        raw_bucket = props.raw_bucket
-        master_bucket = props.master_bucket
-        raw_database = props.raw_database
-        master_database = props.master_database
-        failure_topic = props.failure_topic
+        
 
 
         # 1) RunGlueLoadSD (GlueStartJobRun) - arguments read from $.config.*
         run_glue_load_sd = tasks.GlueStartJobRun(
             self,
-            "RunGlueLoadSD",
+            "RunGlueLoadSFC",
             glue_job_name=job_load_sd,
             integration_pattern=sfn.IntegrationPattern.RUN_JOB,
             result_path="$.glue",
         )
         # Retry (IntervalSeconds: 30, MaxAttempts: 2, BackoffRate: 1)
-        run_glue_load_sd.add_retry(max_attempts=2, interval=Duration.seconds(30), backoff_rate=1)
+        # run_glue_load_sd.add_retry(max_attempts=2, interval=Duration.seconds(30), backoff_rate=1)
 
         # 2) NotifyGoldFail (SNS Publish) - topic passed dynamically in input ($.config.snsTopicArn)
         # no hay sns
@@ -65,10 +57,11 @@ class EtlSfCargaSFCConstruct(Construct):
             "uspLoad_Dim",
             lambda_function=dim_lambda,
             payload=sfn.TaskInput.from_object({
-                "{% $states.input %}",
+            "payload":"{% $states.input %}",
             }),
             result_path="$.sp",
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
         exec_usp_Load_Dim.add_retry(max_attempts=3, interval=Duration.seconds(30), backoff_rate=1)
         
@@ -77,10 +70,11 @@ class EtlSfCargaSFCConstruct(Construct):
             "uspLoad_Facts",
             lambda_function=facts_lambda,
             payload=sfn.TaskInput.from_object({
-                "{% $states.input %}",
+            "payload":"{% $states.input %}",
             }),
             result_path="$.sp",
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
         exec_usp_Load_Facts.add_retry(max_attempts=3, interval=Duration.seconds(30), backoff_rate=1)
 
@@ -114,25 +108,31 @@ class EtlSfCargaSFCConstruct(Construct):
         # )
 
         # Successful flow: RunGlueLoadSD -> ExecUspAutomatizacion -> Success
-        # main_flow = sfn.Chain.start(run_glue_load_sd).next(exec_usp_automatizacion)
+        main_flow = sfn.Chain.start(run_glue_load_sd).next(exec_usp_Load_Dim).next(exec_usp_Load_Facts)
 
         # success_state = sfn.Succeed(self, "Success")
 
         # # The top-level chain ends with success (the failure paths already route to notifications + Fail)
-        # definition = main_flow.next(success_state)
-
-        # # --- Logs ---
-        # log_group = logs.LogGroup(
-        #     self,
-        #     "StateMachineExecutionLogGroup",
-        #     retention=logs.RetentionDays.ONE_WEEK,
-        # )
+        definition = main_flow
+        # --- Logs ---
+        log_group = logs.LogGroup(
+            self,
+            "StateMachineExecutionLogGroup",
+            retention=logs.RetentionDays.ONE_WEEK,
+        )
 
         # --- State Machine ---
         self.state_machine = sfn.StateMachine(
             self,
             "Pl_Tran_CargaSFC_StateMachine_",
             state_machine_name=create_name('sfn', 'pl-tran-carga-sfc'),
+            definition=definition,
+            logs=sfn.LogOptions(
+                destination=log_group,
+                level=sfn.LogLevel.FATAL,
+                include_execution_data=True,
+            ),
+            
         )
 
         # --- Permissions for the state machine role ---
