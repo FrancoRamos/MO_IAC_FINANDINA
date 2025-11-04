@@ -14,7 +14,7 @@ from .....utils.naming import create_name
 @dataclass
 class EtlSfAdlsBronzeSfcConstructProps:
     environment: str
-    job_bronze_sfc_name: str
+    glue_bronze_sfc_name: str
     failure_topic: sns.ITopic
 
 
@@ -23,7 +23,7 @@ class EtlSfAdlsBronzeSfcConstruct(Construct):
         super().__init__(scope, id)
 
         environment = props.environment
-        job_bronze_sfc_name = props.job_bronze_sfc_name
+        glue_bronze_sfc_name = props.glue_bronze_sfc_name
         failure_topic = props.failure_topic
         
         # --- Step: Pass (add executionId)
@@ -41,7 +41,7 @@ class EtlSfAdlsBronzeSfcConstruct(Construct):
         glue_start_job = tasks.GlueStartJobRun(
             self,
             "StartGlueBronzeSFC",
-            glue_job_name=job_bronze_sfc_name,
+            glue_job_name=glue_bronze_sfc_name,
             arguments=sfn.TaskInput.from_object({
                 "--ENVIRONMENT": environment,
                 "--Payload.$": "States.JsonToString($)"

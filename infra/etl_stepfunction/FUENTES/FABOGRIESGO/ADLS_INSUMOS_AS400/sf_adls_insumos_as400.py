@@ -61,6 +61,7 @@ class EtlSfAdlsFaboInsumosAs400Construct(Construct):
             result_path="$.active",
             # payload=sfn.TaskInput.from_object({"Payload.$": "$"}),
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         # retries and catch (mirror JSON)
@@ -91,7 +92,7 @@ class EtlSfAdlsFaboInsumosAs400Construct(Construct):
             },
         )
 
-        get_active_tables.add_catch(notify_global_fail, result_path="$.error")
+        get_active_tables.add_catch(notify_global_fail)
 
         # ----- Choice HasTables -----
         has_tables = sfn.Choice(self, "HasTables")
@@ -120,6 +121,7 @@ class EtlSfAdlsFaboInsumosAs400Construct(Construct):
             result_path="$.origin",
             payload=sfn.TaskInput.from_object({"idConfigOrigen.$": "$.table.idConfigOrigen"}),
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         # IsIncremental choice (nombreCampoPivot == "-")
@@ -150,6 +152,7 @@ class EtlSfAdlsFaboInsumosAs400Construct(Construct):
                 },
             }),
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         # AuditStartFull (tipoCarga=0)
@@ -177,6 +180,7 @@ class EtlSfAdlsFaboInsumosAs400Construct(Construct):
                 },
             }),
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         # GlueCopyFull (sync)
@@ -218,6 +222,7 @@ class EtlSfAdlsFaboInsumosAs400Construct(Construct):
                 "sql": "SELECT valorPivot FROM dbo.controlPipelineLight_gen2 WHERE nombreTabla = 'dbo.XYZ' AND estado = 1 ORDER BY fechaInsertUpdate DESC LIMIT 1",
             }),
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         get_pivot_audit.add_retry(
@@ -264,6 +269,7 @@ class EtlSfAdlsFaboInsumosAs400Construct(Construct):
                 "metrics_path.$": f"States.Format('s3://{raw_bucket_name}/temp/metrics/data/{{}}/{{}}/{{}}/{{}}/', $.table.nombreInstancia, $.table.nombreBaseDatos, $.table.nombreCarpetaDL, $.table.nombreTabla)"
             }),
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         read_metrics.add_retry(
@@ -297,6 +303,7 @@ class EtlSfAdlsFaboInsumosAs400Construct(Construct):
                 },
             }),
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         # AuditFail parallel (UpdFail + NotifyFail)
@@ -324,6 +331,7 @@ class EtlSfAdlsFaboInsumosAs400Construct(Construct):
             }),
             result_path=sfn.JsonPath.DISCARD,
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         # NotifyFail (SNS publish)

@@ -317,6 +317,7 @@ class EtlTfBaseConstruct(Construct):
             ),
             execution_property=glue.CfnJob.ExecutionPropertyProperty(max_concurrent_runs=3),
             default_arguments={
+                "--additional-python-modules": "delta-spark==3.3.0",
             },
             glue_version="5.0",
             worker_type="G.1X",

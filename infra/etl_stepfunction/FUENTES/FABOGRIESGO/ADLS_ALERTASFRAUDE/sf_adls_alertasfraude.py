@@ -61,6 +61,7 @@ class EtlSfAdlsFaboAlertasFraudeConstruct(Construct):
             },
             result_path="$.active",
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         # Add retries and catch to mirror console JSON
@@ -90,7 +91,7 @@ class EtlSfAdlsFaboAlertasFraudeConstruct(Construct):
             },
         )
 
-        get_active_tables.add_catch(publish_global_fail, result_path="$.error")
+        get_active_tables.add_catch(publish_global_fail)
 
         # ----- Choice: HasTables -----
         has_tables = sfn.Choice(self, "HasTables")
@@ -119,6 +120,7 @@ class EtlSfAdlsFaboAlertasFraudeConstruct(Construct):
             result_path="$.origin",
             payload=sfn.TaskInput.from_object({"idConfigOrigen.$": "$.table.idConfigOrigen"}),
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         # Choice: IsIncremental (depends on nombreCampoPivot == '-')
@@ -149,6 +151,7 @@ class EtlSfAdlsFaboAlertasFraudeConstruct(Construct):
                 },
             }),
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         # GlueCopyFull
@@ -201,6 +204,7 @@ class EtlSfAdlsFaboAlertasFraudeConstruct(Construct):
                 },
             }),
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         # BuildPivotAuditSQL (Pass state building SQL)
@@ -228,6 +232,7 @@ class EtlSfAdlsFaboAlertasFraudeConstruct(Construct):
                 "sql.$": "$.pivot.sql",
             }),
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         get_pivot_audit.add_retry(
@@ -278,6 +283,7 @@ class EtlSfAdlsFaboAlertasFraudeConstruct(Construct):
                 )
             }),
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         read_metrics.add_retry(
@@ -311,6 +317,7 @@ class EtlSfAdlsFaboAlertasFraudeConstruct(Construct):
                 },
             }),
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         # AuditFail parallel: UpdFail and NotifyFail
@@ -339,6 +346,7 @@ class EtlSfAdlsFaboAlertasFraudeConstruct(Construct):
             }),
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
             result_path=sfn.JsonPath.DISCARD,
+            retry_on_service_exceptions=False,
         )
 
         notify_fail = sfn.CustomState(
@@ -393,25 +401,25 @@ class EtlSfAdlsFaboAlertasFraudeConstruct(Construct):
 
         ingest_map.iterator(iterator_chain)
 
-        # ----- RunTDC -----
+        # ----- RunAlertasFraude -----
         run_tdc = tasks.GlueStartJobRun(
             self,
-            "RunTDC",
+            "RunAlertasFraude",
             glue_job_name=glue_tdc_job_name,
             integration_pattern=sfn.IntegrationPattern.RUN_JOB,
         )
 
-        # Catch for RunTDC -> NotifyTDCFail
+        # Catch for RunAlertasFraude -> NotifyAlertasFraudeFail
         notify_tdc_fail = sfn.CustomState(
             self,
-            "NotifyTDCFail",
+            "NotifyAlertasFraudeFail",
             state_json={
                 "Type": "Task",
                 "Resource": "arn:aws:states:::aws-sdk:sns:publish",
                 "Parameters": {
                     "TopicArn": failure_topic.topic_arn,
-                    "Subject": "TDC (Glue) FALLÓ",
-                    "Message.$": "States.Format('Glue TDC falló. ExecId={}', $$.Execution.Id)",
+                    "Subject": "AlertasFraude (Glue) FALLÓ",
+                    "Message.$": "States.Format('Glue AlertasFraude falló. ExecId={}', $$.Execution.Id)",
                 },
                 "End": True,
             },
@@ -430,7 +438,7 @@ class EtlSfAdlsFaboAlertasFraudeConstruct(Construct):
         # ----- State Machine -----
         self.state_machine = sfn.StateMachine(
             self,
-            "TdcIngestStateMachine",
+            "AlertasFraudeIngestStateMachine",
             state_machine_name=create_name('sfn', 'fuentes-adls-alertas-fraude'),
             definition_body=sfn.DefinitionBody.from_chainable(definition),
             logs=sfn.LogOptions(destination=log_group, level=sfn.LogLevel.ALL, include_execution_data=True),

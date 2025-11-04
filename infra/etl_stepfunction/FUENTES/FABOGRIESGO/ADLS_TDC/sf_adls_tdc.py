@@ -7,27 +7,25 @@ from aws_cdk import (
     aws_stepfunctions as sfn,
     aws_stepfunctions_tasks as tasks,
     Duration,
-    aws_glue as glue,
     aws_iam as iam,
 )
-from .....utils.naming import create_name
-
+from .....utils.naming import create_name 
 
 @dataclass
-class EtlSfAdlsFaboAgilConstructProps:
+class EtlSfAdlsFaboTdcConstructProps:
     environment: str
     get_active_tables_fn: _lambda.IFunction
     get_origin_params_fn: _lambda.IFunction
     sql_runner_fn: _lambda.IFunction
     read_metrics_fn: _lambda.IFunction
     glue_extractcopy_job_name: str
-    glue_bpmpro_job_name: str
+    glue_tdc_job_name: str
     failure_topic: sns.ITopic
     raw_bucket_name: str
 
 
-class EtlSfAdlsFaboAgilConstruct(Construct):
-    def __init__(self, scope: Construct, id: str, props: EtlSfAdlsFaboAgilConstructProps) -> None:
+class EtlSfAdlsFaboTdcConstruct(Construct):
+    def __init__(self, scope: Construct, id: str, props: EtlSfAdlsFaboTdcConstructProps) -> None:
         super().__init__(scope, id)
 
         environment = props.environment
@@ -36,14 +34,14 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
         sql_runner_fn = props.sql_runner_fn
         read_metrics_fn = props.read_metrics_fn
         glue_extractcopy_job_name = props.glue_extractcopy_job_name
-        glue_bpmpro_job_name = props.glue_bpmpro_job_name
+        glue_tdc_job_name = props.glue_tdc_job_name
         failure_topic = props.failure_topic
         raw_bucket_name = props.raw_bucket_name
 
         # Log group
         log_group = logs.LogGroup(
             self,
-            "SfFinandinaBpmProLogs",
+            "SfTdcLogs",
             retention=logs.RetentionDays.ONE_MONTH,
         )
 
@@ -121,6 +119,7 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
             result_path="$.origin",
             payload=sfn.TaskInput.from_object({"idConfigOrigen.$": "$.table.idConfigOrigen"}),
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         # IsIncremental choice (nombreCampoPivot == "-")
@@ -151,6 +150,7 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
                 },
             }),
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         # AuditStartFull (tipoCarga=0)
@@ -178,6 +178,7 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
                 },
             }),
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         # GlueCopyFull (sync)
@@ -219,6 +220,7 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
                 "sql": "SELECT valorPivot FROM dbo.controlPipelineLight_gen2 WHERE nombreTabla = 'dbo.XYZ' AND estado = 1 ORDER BY fechaInsertUpdate DESC LIMIT 1",
             }),
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         get_pivot_audit.add_retry(
@@ -265,6 +267,7 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
                 "metrics_path.$": f"States.Format('s3://{raw_bucket_name}/temp/metrics/data/{{}}/{{}}/{{}}/{{}}/', $.table.nombreInstancia, $.table.nombreBaseDatos, $.table.nombreCarpetaDL, $.table.nombreTabla)"
             }),
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         read_metrics.add_retry(
@@ -298,6 +301,7 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
                 },
             }),
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         # AuditFail parallel (UpdFail + NotifyFail)
@@ -325,6 +329,7 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
             }),
             result_path=sfn.JsonPath.DISCARD,
             integration_pattern=sfn.IntegrationPattern.REQUEST_RESPONSE,
+            retry_on_service_exceptions=False,
         )
 
         # NotifyFail (SNS publish)
@@ -375,46 +380,46 @@ class EtlSfAdlsFaboAgilConstruct(Construct):
 
         ingest_map.iterator(iterator_chain)
 
-        # ----- RunFinandinaBPMPro (Glue job) -----
-        run_finandina_bpmpro = tasks.GlueStartJobRun(
+        # ----- RunTdc (Glue job) -----
+        run_tdc = tasks.GlueStartJobRun(
             self,
-            "RunFinandinaBPMPro",
-            glue_job_name=glue_bpmpro_job_name,
+            "RunTdc",
+            glue_job_name=glue_tdc_job_name,
             integration_pattern=sfn.IntegrationPattern.RUN_JOB,
         )
 
-        # NotifyFinandinaBPMProFail
+        # NotifyTdcFail
         notify_finandina_fail = sfn.CustomState(
             self,
-            "NotifyFinandinaBPMProFail",
+            "NotifyTdcFail",
             state_json={
                 "Type": "Task",
                 "Resource": "arn:aws:states:::aws-sdk:sns:publish",
                 "Parameters": {
                     "TopicArn": failure_topic.topic_arn,
-                    "Subject": "FinandinaBPMPro (Glue) FALLÓ",
-                    "Message.$": "States.Format('Glue FinandinaBPMPro falló. ExecId={}', $$.Execution.Id)",
+                    "Subject": "TDC (Glue) FALLÓ",
+                    "Message.$": "States.Format('Glue TDC falló. ExecId={}', $$.Execution.Id)",
                 },
                 "End": True,
             },
         )
 
-        run_finandina_bpmpro.add_catch(notify_finandina_fail, result_path=sfn.JsonPath.DISCARD)
+        run_tdc.add_catch(notify_finandina_fail, result_path=sfn.JsonPath.DISCARD)
 
         # ----- Top-level wiring -----
         has_tables.when(
             sfn.Condition.number_equals("$.active.count", 0),
             end_no_tables
         )
-        has_tables.otherwise(ingest_map.next(run_finandina_bpmpro))
+        has_tables.otherwise(ingest_map.next(run_tdc))
 
         definition = sfn.Chain.start(get_active_tables).next(has_tables)
 
         # ----- State Machine -----
         self.state_machine = sfn.StateMachine(
             self,
-            "FinandinaBpmProStateMachine",
-            state_machine_name=create_name('sfn', 'fuentes-bpm-pro-adls-agil'),
+            "TdcStateMachine",
+            state_machine_name=create_name('sfn', 'fuentes-adls-tdc'),
             definition_body=sfn.DefinitionBody.from_chainable(definition),
             logs=sfn.LogOptions(destination=log_group, level=sfn.LogLevel.ALL, include_execution_data=True),
         )

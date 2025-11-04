@@ -52,6 +52,15 @@ from infra.etl_stepfunction.FUENTES.FABOGSQL03 import EtlSfAdlsFabogsqlEsbdataCo
 from infra.etl_stepfunction.DATABRICKS.BRONZE.SFC import EtlTfAdlsBronzeSfcConstruct, EtlTfAdlsBronzeSfcConstructProps
 from infra.etl_stepfunction.DATABRICKS.BRONZE.SFC import EtlSfAdlsBronzeSfcConstruct, EtlSfAdlsBronzeSfcConstructProps
 
+from infra.etl_stepfunction.DATABRICKS.SILVER.CUBO_CREDITO import EtlTfAdlsSilverCuboCreditoConstruct, EtlTfAdlsSilverCuboCreditoConstructProps
+from infra.etl_stepfunction.DATABRICKS.SILVER.CUBO_CREDITO import EtlSfAdlsSilverCuboCreditoConstruct, EtlSfAdlsSilverCuboCreditoConstructProps
+
+from infra.etl_stepfunction.FUENTES.FABOGRIESGO.ADLS_CARTERAFINAINCO_TRG import EtlTfAdlsCarteraFinaincoConstruct, EtlTfAdlsCarteraFinaincoConstructProps
+from infra.etl_stepfunction.FUENTES.FABOGRIESGO.ADLS_CARTERAFINAINCO_TRG import EtlSfAdlsCarteraFinaincoConstruct, EtlSfAdlsCarteraFinaincoConstructProps
+
+from infra.etl_stepfunction.FUENTES.FABOGRIESGO.ADLS_TDC import EtlTfAdlsFaboTdcConstruct, EtlTfAdlsFaboTdcConstructProps
+from infra.etl_stepfunction.FUENTES.FABOGRIESGO.ADLS_TDC import EtlSfAdlsFaboTdcConstruct, EtlSfAdlsFaboTdcConstructProps
+
 from ...utils.naming import create_name
 
 @dataclass
@@ -174,44 +183,6 @@ class EtlStack(Stack):
             self,
             "EtlStepFunctionsBase",
             props=etl_sf_base_props,
-        )
-
-
-        # --- Five9 Fuente Transform ---
-        etl_tf_five9_props = EtlTfAdlsCetFive9ConstructProps(
-            environment=context_env.environment,
-            region=context_env.region,
-            account=context_env.accountId,
-            raw_bucket=storage.raw_bucket,
-            scripts_bucket=storage.scripts_bucket,
-            raw_database=props.raw_database_name,
-            datalake_lib_layer_arn=props.datalake_lib_layer.layer_version_arn,
-            lambda_execution_role=security.lambdaExecutionRole,
-            job_role=security.lakeFormationRole,
-            kms_key=security.kmsKey,
-            redshift_database="dl_dev",
-            redshift_secret_arn=props.redshift_secret_arn,
-            redshift_workgroup_name="dl-workgroup-dev-rs",
-        )
-
-        etl_tf_five9 = EtlTfAdlsCetFive9Construct(
-            self,
-            "EtlTfAdlsCetFive9",
-            props=etl_tf_five9_props,
-        )
-
-        # --- Five9 Fuente Step Function ---
-        etl_sf_adls_cet_five9_props = EtlSfAdlsCetFive9ConstructProps(
-            environment=context_env.environment,
-            region=context_env.region,
-            account=context_env.accountId,
-            lookup_redshift_fn=etl_tf_five9.lambda_lookup1,
-        )
-
-        etl_sf_adls_cet_five9 = EtlSfAdlsCetFive9Construct(
-            self,
-            "EtlSfAdlsCetFive9",
-            props=etl_sf_adls_cet_five9_props,
         )
 
 
@@ -394,7 +365,7 @@ class EtlStack(Stack):
         )
         
 
-        # --- Fuentes Faboriesgo ADSL Agil Transform ---
+        # --- Fuentes Faboriesgo ADLS Agil Transform ---
         etl_tf_fabo_agil_props = EtlTfAdlsFaboAgilConstructProps(
             environment=context_env.environment,
             scripts_bucket=storage.scripts_bucket,
@@ -407,7 +378,7 @@ class EtlStack(Stack):
             props=etl_tf_fabo_agil_props,
         )
         
-        # --- Fuentes Faboriesgo ADSL Agil Step Function ---
+        # --- Fuentes Faboriesgo ADLS Agil Step Function ---
         etl_sf_fabo_agil_props = EtlSfAdlsFaboAgilConstructProps(
             environment=context_env.environment,
             get_active_tables_fn=etl_tf_base.get_active_tables_lambda,
@@ -426,7 +397,7 @@ class EtlStack(Stack):
             props=etl_sf_fabo_agil_props,
         )
         
-        # --- Fuentes FaboGSQLCLU ADSL Gestion Cliente Transform ---
+        # --- Fuentes FaboGSQLCLU ADLS Gestion Cliente Transform ---
         etl_tf_fabo_gestion_cliente_props = EtlTfAdlsFaboGestionClienteConstructProps(
             environment=context_env.environment,
             scripts_bucket=storage.scripts_bucket,
@@ -439,7 +410,7 @@ class EtlStack(Stack):
             props=etl_tf_fabo_gestion_cliente_props,
         )
         
-        # --- Fuentes FaboGSQLCLU ADSL Gestion Cliente Step Function ---
+        # --- Fuentes FaboGSQLCLU ADLS Gestion Cliente Step Function ---
         etl_sf_fabo_agil_props = EtlSfAdlsFaboGestionClienteConstructProps(
             environment=context_env.environment,
             get_active_tables_fn=etl_tf_base.get_active_tables_lambda,
@@ -458,7 +429,7 @@ class EtlStack(Stack):
             props=etl_sf_fabo_agil_props,
         )
         
-        # --- Fuentes Faboriesgo ADSL Insumos AS400 Transform ---
+        # --- Fuentes Faboriesgo ADLS Insumos AS400 Transform ---
         etl_tf_fabo_insumos_as400_props = EtlTfAdlsFaboInsumosAs400ConstructProps(
             environment=context_env.environment,
             scripts_bucket=storage.scripts_bucket,
@@ -471,7 +442,7 @@ class EtlStack(Stack):
             props=etl_tf_fabo_insumos_as400_props,
         )
         
-        # --- Fuentes Faboriesgo ADSL Insumos AS400 Step Function ---
+        # --- Fuentes Faboriesgo ADLS Insumos AS400 Step Function ---
         etl_sf_fabo_insumos_as400_props = EtlSfAdlsFaboInsumosAs400ConstructProps(
             environment=context_env.environment,
             get_active_tables_fn=etl_tf_base.get_active_tables_lambda,
@@ -491,7 +462,7 @@ class EtlStack(Stack):
         )
         
         
-        # --- Fuentes Faboriesgo ADSL Vehiculos BIC Step Function ---
+        # --- Fuentes Faboriesgo ADLS Vehiculos BIC Step Function ---
         etl_sf_fabo_vehiculos_bic_props = EtlSfAdlsFaboVehiculosBicProps(
             environment=context_env.environment,
             get_active_tables_fn=etl_tf_base.get_active_tables_lambda,
@@ -510,7 +481,7 @@ class EtlStack(Stack):
         )
 
         
-        # --- Fuentes Fabogsql ADSL Esbdata Transform ---
+        # --- Fuentes Fabogsql ADLS Esbdata Transform ---
         etl_tf_fabogsql_esbdata_props = EtlTfAdlsFabogsqlEsbdataConstructProps(
             environment=context_env.environment,
             project=context_env.project,
@@ -524,7 +495,7 @@ class EtlStack(Stack):
             props=etl_tf_fabogsql_esbdata_props,
         )
 
-        # --- Fuentes Fabogsql ADSL Esbdata Step Function ---
+        # --- Fuentes Fabogsql ADLS Esbdata Step Function ---
         etl_sf_fabogsql_esbdata_props = EtlSfAdlsFabogsqlEsbdataConstructProps(
             environment=context_env.environment,
             lookup_fn=etl_tf_fabogsql_esbdata.lookup_lambda,
@@ -562,7 +533,7 @@ class EtlStack(Stack):
         # --- Databricks Bronze SFC Step Function ---
         etl_sf_bronze_sfc_props = EtlSfAdlsBronzeSfcConstructProps(
             environment=context_env.environment,
-            job_bronze_sfc_name=etl_tf_bronze_sfc.job_bronze_sfc_name,
+            glue_bronze_sfc_name=etl_tf_bronze_sfc.job_bronze_sfc_name,
             failure_topic=etl_tf_base.sns_failure_topic,
         )
 
@@ -570,4 +541,134 @@ class EtlStack(Stack):
             self,
             "EtlSfBronzeSFC",
             props=etl_sf_bronze_sfc_props,
+        )
+        
+        # --- Databricks Silver Cubo Credito Transform ---
+        etl_tf_silver_cubo_credito_props = EtlTfAdlsSilverCuboCreditoConstructProps(
+            environment=context_env.environment,
+            scripts_bucket=storage.scripts_bucket,
+            job_role=security.lakeFormationRole,
+        )
+
+        etl_tf_silver_cubo_credito = EtlTfAdlsSilverCuboCreditoConstruct(
+            self,
+            "EtlTfSilverCuboCredito",
+            props=etl_tf_silver_cubo_credito_props,
+        )
+
+        # --- Databricks Silver Cubo Credito Step Function ---
+        etl_sf_silver_cubo_credito_props = EtlSfAdlsSilverCuboCreditoConstructProps(
+            environment=context_env.environment,
+            error_fn=etl_tf_base.error_lambda,
+            glue_silver_cubocredito_name=etl_tf_silver_cubo_credito.job_silver_cubocredito_name,
+            glue_silver_reportecubo_name=etl_tf_silver_cubo_credito.job_silver_reportecubo_name,
+            failure_topic=etl_tf_base.sns_failure_topic,
+        )
+
+        etl_sf_silver_cubo_credito = EtlSfAdlsSilverCuboCreditoConstruct(
+            self,
+            "EtlSfSilverCuboCredito",
+            props=etl_sf_silver_cubo_credito_props,
+        )
+        
+
+        # --- Fuentes Fabogriesgo Cartera Finainco Trg Transform ---
+        etl_tf_cartera_finainco_trg_props = EtlTfAdlsCarteraFinaincoConstructProps(
+            environment=context_env.environment,
+            scripts_bucket=storage.scripts_bucket,
+            lambda_execution_role=security.lambdaExecutionRole,
+        )
+
+        etl_tf_cartera_finainco_trg = EtlTfAdlsCarteraFinaincoConstruct(
+            self,
+            "EtlTfCarteraFinaincoTrg",
+            props=etl_tf_cartera_finainco_trg_props,
+        )
+
+        # --- Fuentes Fabogriesgo Cartera Finainco Trg Step Function ---
+        etl_sf_cartera_finainco_trg_props = EtlSfAdlsCarteraFinaincoConstructProps(
+            environment=context_env.environment,
+            insertaud_fn=etl_tf_cartera_finainco_trg.insertaud_lambda,
+            incredata_fn=etl_tf_cartera_finainco_trg.incredata_lambda,
+            fulldata_fn=etl_tf_cartera_finainco_trg.fulldata_lambda,
+            success_fn=etl_tf_cartera_finainco_trg.success_lambda,
+            daily_fn=etl_tf_cartera_finainco_trg.daily_lambda,
+            failure_topic=etl_tf_base.sns_failure_topic,
+            raw_bucket_name=storage.raw_bucket.bucket_name,
+        )
+
+        etl_sf_cartera_finainco_trg = EtlSfAdlsCarteraFinaincoConstruct(
+            self,
+            "EtlSfCarteraFinaincoTrg",
+            props=etl_sf_cartera_finainco_trg_props,
+        )
+        
+        # --- Fuentes Fabogriesgo ADLS TDC Transform ---
+        etl_tf_fabo_tdc_props = EtlTfAdlsFaboTdcConstructProps(
+            environment=context_env.environment,
+            scripts_bucket=storage.scripts_bucket,
+            job_role=security.lakeFormationRole,
+        )
+
+        etl_tf_fabo_tdc = EtlTfAdlsFaboTdcConstruct(
+            self,
+            "EtlTfFaboTDC",
+            props=etl_tf_fabo_tdc_props,
+        )
+
+        # --- Fuentes Fabogriesgo ADLS TDC Step Function ---
+        etl_sf_fabo_tdc_props = EtlSfAdlsFaboTdcConstructProps(
+            environment=context_env.environment,
+            get_active_tables_fn=etl_tf_base.get_active_tables_lambda,
+            get_origin_params_fn=etl_tf_base.get_origin_params_lambda,
+            sql_runner_fn=etl_tf_base.sql_runner_lambda,
+            read_metrics_fn=etl_tf_base.read_metrics_lambda,
+            glue_extractcopy_job_name=etl_tf_base.job_extract_copy_name,
+            glue_tdc_job_name=etl_tf_base.job_tdc_name,                     # etl_tf_fabo_tdc.job_tdc_name,
+            failure_topic=etl_tf_base.sns_failure_topic,
+            raw_bucket_name=storage.raw_bucket.bucket_name,
+        )
+
+        etl_sf_fabo_tdc = EtlSfAdlsFaboTdcConstruct(
+            self,
+            "EtlSfFaboTDC",
+            props=etl_sf_fabo_tdc_props,
+        )
+        
+
+        # --- Five9 Fuente Transform ---
+        etl_tf_five9_props = EtlTfAdlsCetFive9ConstructProps(
+            environment=context_env.environment,
+            region=context_env.region,
+            account=context_env.accountId,
+            raw_bucket=storage.raw_bucket,
+            scripts_bucket=storage.scripts_bucket,
+            raw_database=props.raw_database_name,
+            datalake_lib_layer_arn=props.datalake_lib_layer.layer_version_arn,
+            lambda_execution_role=security.lambdaExecutionRole,
+            job_role=security.lakeFormationRole,
+            kms_key=security.kmsKey,
+            redshift_database="dl_dev",
+            redshift_secret_arn=props.redshift_secret_arn,
+            redshift_workgroup_name="dl-workgroup-dev-rs",
+        )
+
+        etl_tf_five9 = EtlTfAdlsCetFive9Construct(
+            self,
+            "EtlTfAdlsCetFive9",
+            props=etl_tf_five9_props,
+        )
+
+        # --- Five9 Fuente Step Function ---
+        etl_sf_adls_cet_five9_props = EtlSfAdlsCetFive9ConstructProps(
+            environment=context_env.environment,
+            region=context_env.region,
+            account=context_env.accountId,
+            lookup_redshift_fn=etl_tf_five9.lambda_lookup1,
+        )
+
+        etl_sf_adls_cet_five9 = EtlSfAdlsCetFive9Construct(
+            self,
+            "EtlSfAdlsCetFive9",
+            props=etl_sf_adls_cet_five9_props,
         )

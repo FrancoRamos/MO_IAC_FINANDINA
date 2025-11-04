@@ -39,7 +39,7 @@ class EtlTfAdlsBronzeSfcConstruct(Construct):
         # --- Glue Jobs ---
         glue.CfnJob(
             self,
-            "GlueJobRawSD",
+            "GlueJobBronzeSFC",
             name=self.job_bronze_sfc_name,
             role=job_role.role_arn,
             command={
@@ -52,6 +52,7 @@ class EtlTfAdlsBronzeSfcConstruct(Construct):
                 "--JOB_NAME": self.job_bronze_sfc_name,
                 "--raw_bucket": raw_bucket_name,
                 "--raw_db": raw_database,
+                "--extra-py-files": f"s3://{scripts_bucket.bucket_name}/lib/transversales_aws02.py"
             },
             glue_version="5.0",
             worker_type="G.1X",
